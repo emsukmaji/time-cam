@@ -165,6 +165,7 @@
   <div class="card">
     <h3>Edit Watermark</h3>
     <label>Lokasi (kosongkan untuk otomatis dari GPS)</label>
+    <div class="hint" id="accLbl" style="text-align:left;margin:0 0 6px"></div>
     <input id="inLoc" placeholder="Jalan …, Kota, Provinsi">
     <label>Catatan</label>
     <textarea id="inNote" rows="2" placeholder="I've been here :)"></textarea>
@@ -314,29 +315,68 @@ $('zoom').onclick = async e => {
   if (device !== state.deviceId) { state.deviceId = device; await startCamera(); }
 };
 
-/* ---------- Location ---------- */
+/* ---------- Location ----------
+   Keeps watching GPS (not a single reading), keeps the most accurate fix,
+   and looks up a detailed street address (house number, road, area, city, postcode). */
+const geoCache = { key: '', text: '' };
 async function reverseGeocode(lat, lon) {
+  const key = lat.toFixed(4) + ',' + lon.toFixed(4);           // ~10 m grid, avoids repeat lookups
+  if (geoCache.key === key) return geoCache.text;
   try {
-    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=id&zoom=17`);
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=id&zoom=18&addressdetails=1`);
     const j = await r.json(); const a = j.address || {};
-    const parts = [
-      a.road || a.neighbourhood || a.hamlet || a.village || a.suburb,
-      a.city || a.town || a.county || a.municipality || a.city_district,
-      a.state
-    ].filter(Boolean);
-    return parts.length ? parts.join(', ') : j.display_name;
+    const street = [a.house_number, a.road || a.pedestrian || a.footway || a.residential].filter(Boolean).join(' ');
+    const area = a.neighbourhood || a.quarter || a.hamlet || a.village || a.suburb;
+    const city = a.city || a.town || a.municipality || a.county || a.city_district;
+    const parts = [street, area, city, [a.state, a.postcode].filter(Boolean).join(' ')].filter(Boolean);
+    const seen = new Set(), uniq = parts.filter(x => !seen.has(x) && seen.add(x));
+    const text = uniq.length ? uniq.join(', ') : j.display_name;
+    geoCache.key = key; geoCache.text = text;
+    return text;
   } catch { return `${lat.toFixed(5)}, ${lon.toFixed(5)}`; }
 }
-function getLocation() {
-  if (!navigator.geolocation) { state.autoLoc = 'Lokasi tidak tersedia'; renderWm(); return; }
-  state.autoLoc = 'Mencari lokasi…'; renderWm();
-  navigator.geolocation.getCurrentPosition(async p => {
-    state.coords = { lat: p.coords.latitude, lon: p.coords.longitude };
-    state.autoLoc = await reverseGeocode(state.coords.lat, state.coords.lon);
-    renderWm();
-  }, () => { state.autoLoc = 'Izin lokasi ditolak'; renderWm(); }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+const geo = { watch: null, best: null, lastLookup: null, timer: 0 };
+const distM = (a, b) => {
+  const R = 6371000, toR = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * toR, dLon = (b.lon - a.lon) * toR;
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * toR) * Math.cos(b.lat * toR) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+};
+async function onFix(p) {
+  const fix = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy, t: Date.now() };
+  // accept a fix if it's more accurate, or the old one is stale (>30 s), or we've clearly moved
+  const b = geo.best;
+  if (b && fix.acc > b.acc && Date.now() - b.t < 30000 && distM(b, fix) < Math.max(b.acc, 30)) return;
+  geo.best = fix;
+  state.coords = { lat: fix.lat, lon: fix.lon }; state.accuracy = Math.round(fix.acc);
+  updateAccLabel();
+  // look up the address again only when we moved or the fix got much better
+  const L = geo.lastLookup;
+  if (!L || distM(L, fix) > 15 || fix.acc < L.acc * 0.5) {
+    geo.lastLookup = fix;
+    state.autoLoc = await reverseGeocode(fix.lat, fix.lon);
+  }
+  renderWm();
 }
-$('locBtn').onclick = getLocation;
+function onGeoErr(e) {
+  if (e.code === 1) state.autoLoc = 'Izin lokasi ditolak';
+  else if (!geo.best) state.autoLoc = 'Lokasi belum ditemukan';
+  renderWm();
+}
+function getLocation(fresh) {
+  if (!navigator.geolocation) { state.autoLoc = 'Lokasi tidak tersedia'; renderWm(); return; }
+  if (fresh) { geo.best = null; geo.lastLookup = null; geoCache.key = ''; }
+  if (!geo.best) { state.autoLoc = 'Mencari lokasi…'; renderWm(); }
+  const opts = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 };
+  if (geo.watch !== null) navigator.geolocation.clearWatch(geo.watch);
+  geo.watch = navigator.geolocation.watchPosition(onFix, onGeoErr, opts);
+}
+function updateAccLabel() {
+  const el = $('accLbl'); if (!el) return;
+  el.textContent = state.accuracy ? `Akurasi GPS saat ini: ±${state.accuracy} m` : '';
+}
+$('locBtn').onclick = () => getLocation(true);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) getLocation(); });
 
 /* ---------- Edit sheet ---------- */
 function openSheet(id) { $(id).classList.add('open'); }
