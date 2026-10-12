@@ -78,10 +78,10 @@
   .wm-note:empty { display:none; }
 
   /* Bottom mode bar */
-  .modes { background:#fff; padding:6px 8px calc(env(safe-area-inset-bottom) + 14px); display:flex; justify-content:center; gap:56px; font:600 16px Poppins; color:#9a9a9a; }
+  .modes { background:#fff; padding:8px 8px max(calc(env(safe-area-inset-bottom) - 10px), 12px); display:flex; justify-content:center; gap:56px; font:600 16px/1.2 Poppins; color:#9a9a9a; }
   .modes span { padding:4px 6px; cursor:pointer; }
   .modes span.on { color:#111; position:relative; }
-  .modes span.on::after { content:""; position:absolute; left:50%; bottom:-10px; width:6px; height:6px; border-radius:50%; background:#111; transform:translateX(-50%); }
+  .modes span.on::after { content:""; position:absolute; left:50%; bottom:-6px; width:6px; height:6px; border-radius:50%; background:#111; transform:translateX(-50%); }
 
   .flash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity .25s; }
   .flash.go { opacity:.8; transition:none; }
