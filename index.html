@@ -17,7 +17,7 @@
   :root { --gold:#E8B84A; --bg:#fff; --ink:#111; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body { margin:0; height:100%; background:var(--bg); font-family:Poppins,system-ui,sans-serif; overflow:hidden; overscroll-behavior:none; }
-  .app { position:fixed; inset:0; height:100dvh; display:flex; flex-direction:column; }
+  .app { position:fixed; top:0; left:0; right:0; height:var(--app-h, 100dvh); display:flex; flex-direction:column; }
 
   /* Top bar */
   .top { padding:calc(env(safe-area-inset-top) + 8px) 16px 10px; display:flex; align-items:center; justify-content:space-between; background:#fff; }
@@ -384,6 +384,17 @@ $('saveBtn').onclick = async () => {
   }
   const a = document.createElement('a'); a.href = state.lastUrl; a.download = name; a.click();
 };
+
+/* ---------- Full-screen height ----------
+   iOS home-screen apps often report a viewport shorter than the screen, leaving a blank strip at the bottom.
+   In standalone mode use the full screen height so the bottom bar sits at the very bottom. */
+function fitHeight() {
+  const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+  const portrait = innerHeight >= innerWidth;
+  const h = standalone && portrait ? Math.max(innerHeight, screen.height) : innerHeight;
+  document.documentElement.style.setProperty('--app-h', h + 'px');
+}
+fitHeight(); addEventListener('resize', fitHeight); addEventListener('orientationchange', () => setTimeout(fitHeight, 300));
 
 /* ---------- Boot ---------- */
 document.fonts && document.fonts.load('300 64px Oswald');
