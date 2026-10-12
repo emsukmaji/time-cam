@@ -56,6 +56,15 @@
   .shutter:active { background:rgba(255,255,255,.3); }
   .tpl svg { width:34px; height:34px; stroke:#fff; fill:none; stroke-width:2; margin:0 auto 6px; display:block; }
 
+  .shutter .dot { display:block; width:100%; height:100%; border-radius:50%; background:transparent; transition:all .2s; transform:scale(.86); }
+  .video-mode .shutter .dot { background:#ff3b30; }
+  .recording .shutter .dot { border-radius:8px; transform:scale(.42); }
+  .rec { position:absolute; top:12px; left:50%; transform:translateX(-50%); background:#ff3b30; color:#fff; font:600 15px Poppins; padding:4px 12px; border-radius:6px; display:none; font-variant-numeric:tabular-nums; }
+  .recording .rec { display:block; }
+  .recording .rail, .recording #flipBtn, .recording .modes, .recording .thumb, .recording .team { opacity:.3; pointer-events:none; }
+  [hidden] { display:none !important; }
+  .preview video { width:100%; border-radius:10px; display:block; background:#000; }
+
   /* Watermark — same proportions as the saved photo (0.82 of a 390px layout) */
   .wm { position:relative; margin:8px 14px 0; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.35); pointer-events:none; }
   .wm-row { display:flex; align-items:stretch; gap:10px; }
@@ -67,7 +76,8 @@
   .wm-note:empty { display:none; }
 
   /* Bottom mode bar */
-  .modes { background:#fff; padding:6px 8px calc(env(safe-area-inset-bottom) + 14px); display:flex; justify-content:space-around; font:600 16px Poppins; color:#9a9a9a; }
+  .modes { background:#fff; padding:6px 8px calc(env(safe-area-inset-bottom) + 14px); display:flex; justify-content:center; gap:56px; font:600 16px Poppins; color:#9a9a9a; }
+  .modes span { padding:4px 6px; cursor:pointer; }
   .modes span.on { color:#111; position:relative; }
   .modes span.on::after { content:""; position:absolute; left:50%; bottom:-10px; width:6px; height:6px; border-radius:50%; background:#111; transform:translateX(-50%); }
 
@@ -103,6 +113,7 @@
     <video id="video" playsinline muted autoplay></video>
     <div class="msg" id="msg"><div>Mengaktifkan kamera…</div></div>
     <div class="flash" id="flash"></div>
+    <div class="rec" id="recTime">00:00</div>
 
     <div class="rail">
       <div class="zoom" id="zoom">
@@ -120,7 +131,7 @@
       <button class="team" id="teamBtn">Edit Watermark<b>→</b></button>
       <div class="controls">
         <button class="thumb" id="thumbBtn"><div class="box" id="thumbBox"></div>Preview</button>
-        <button class="shutter" id="shutter" aria-label="Ambil foto"></button>
+        <button class="shutter" id="shutter" aria-label="Ambil foto"><span class="dot"></span></button>
         <button class="thumb tpl" id="tplBtn"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 10h8M8 14h6M8 17.5h3"/></svg>Templates</button>
       </div>
       <div class="wm" id="wm">
@@ -135,7 +146,7 @@
     </div>
   </div>
 
-  <div class="modes"><span>Reports</span><span>Video</span><span class="on">Photo</span><span>Clock</span><span>Checklist</span></div>
+  <div class="modes" id="modes"><span data-mode="video">Video</span><span data-mode="photo" class="on">Photo</span></div>
 </div>
 
 <!-- Edit sheet -->
@@ -155,8 +166,9 @@
 <div class="sheet" id="prevSheet">
   <div class="card preview">
     <img id="prevImg" alt="Hasil foto">
+    <video id="prevVid" controls playsinline hidden></video>
     <div class="row"><button class="btn alt" data-close>Tutup</button><button class="btn gold" id="saveBtn">Simpan ke Foto</button></div>
-    <div class="hint">Di iPhone: tekan "Simpan ke Foto" → pilih <b>Save Image</b>. Atau tekan-tahan gambar → Save to Photos.</div>
+    <div class="hint">Di iPhone: tekan "Simpan ke Foto" → pilih <b>Save Image</b> / <b>Save Video</b>. Atau tekan-tahan gambar → Save to Photos.</div>
   </div>
 </div>
 
@@ -202,6 +214,7 @@ renderWm();
 /* ---------- Camera ---------- */
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error('timeout'), { name: 'Timeout' })), ms))]);
 async function startCamera() {
+  if (document.body.classList.contains('recording')) stopRecording();
   if (state.stream) state.stream.getTracks().forEach(t => t.stop());
   msg.style.display = 'grid';
   msg.innerHTML = '<div>Mengaktifkan kamera…<br><small>Izinkan akses kamera jika diminta</small></div>';
@@ -380,46 +393,122 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
 
-$('shutter').onclick = async () => {
-  if (!video.videoWidth) return;
-  const f = $('flash'); f.classList.add('go'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('go')));
-
-  // Use the camera's full frame (9:16 portrait on iPhone, like Timemark) at full resolution
-  const stage = $('stage').getBoundingClientRect();
-  // Always output exactly 9:16 portrait (like Timemark), center-cropped from whatever the camera gives
-  const vw = video.videoWidth, vh = video.videoHeight;
-  const R = 9 / 16;
+/* ---------- Capture (photo & video) ---------- */
+// 9:16 portrait crop of the camera frame, with digital zoom
+function frameRect() {
+  const vw = video.videoWidth, vh = video.videoHeight, R = 9 / 16;
   let cw = vw, ch = vh;
   if (vw / vh > R) cw = vh * R; else ch = vw / R;
-  const W = Math.round(cw), H = Math.round(ch);          // full-res 9:16 at 1x
-  const sw = cw / state.zoom, sh = ch / state.zoom;       // digital zoom crops further
-  const sx = (vw - sw) / 2, sy = (vh - sh) / 2;
-  const c = $('canvas'); c.width = W; c.height = H;
-  const ctx = c.getContext('2d');
+  const sw = cw / state.zoom, sh = ch / state.zoom;
+  return { sx: (vw - sw) / 2, sy: (vh - sh) / 2, sw, sh, W: Math.round(cw), H: Math.round(ch) };
+}
+function drawFrame(ctx, W, H) {
+  const r = frameRect();
   ctx.save();
   if (state.facing === 'user') { ctx.translate(W, 0); ctx.scale(-1, 1); }
-  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, W, H);
+  ctx.drawImage(video, r.sx, r.sy, r.sw, r.sh, 0, 0, W, H);
   ctx.restore();
-
-  // Watermark sized relative to photo width (layout designed for a 390px-wide phone), a bit smaller like Timemark
   drawWatermark(ctx, W, H, Math.min(W, H) / 390 * 0.82);
-
-  c.toBlob(blob => {
-    if (state.lastUrl) URL.revokeObjectURL(state.lastUrl);
-    state.lastBlob = blob; state.lastUrl = URL.createObjectURL(blob);
+}
+function showResult(blob, kind) {
+  if (state.lastUrl) URL.revokeObjectURL(state.lastUrl);
+  state.lastBlob = blob; state.lastKind = kind; state.lastUrl = URL.createObjectURL(blob);
+  const img = $('prevImg'), vid = $('prevVid');
+  if (kind === 'photo') {
     $('thumbBox').style.backgroundImage = `url(${state.lastUrl})`;
-    $('prevImg').src = state.lastUrl;
-    openSheet('prevSheet');
-  }, 'image/jpeg', 0.92);
+    img.hidden = false; img.src = state.lastUrl; vid.hidden = true; vid.removeAttribute('src');
+  } else {
+    img.hidden = true; vid.hidden = false; vid.src = state.lastUrl;
+  }
+  openSheet('prevSheet');
+}
+
+function takePhoto() {
+  const f = $('flash'); f.classList.add('go'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('go')));
+  const { W, H } = frameRect();
+  const c = $('canvas'); c.width = W; c.height = H;
+  drawFrame(c.getContext('2d'), W, H);
+  c.toBlob(blob => showResult(blob, 'photo'), 'image/jpeg', 0.92);
+}
+
+/* Video: draw camera + live watermark onto a canvas and record that canvas */
+const rec = { recorder: null, chunks: [], raf: 0, timer: 0, start: 0, audio: null, canvas: null };
+function pickMime() {
+  const opts = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
+  return opts.find(m => window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) || '';
+}
+async function startRecording() {
+  if (!window.MediaRecorder) { alert('Browser ini belum mendukung rekam video.'); return; }
+  const fr = frameRect();
+  const scale = Math.min(1, 1080 / fr.W);                 // cap at 1080x1920 so the phone keeps up
+  const W = Math.round(fr.W * scale / 2) * 2, H = Math.round(fr.H * scale / 2) * 2;
+  const c = rec.canvas || (rec.canvas = document.createElement('canvas'));
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  const loop = () => { drawFrame(ctx, W, H); rec.raf = requestAnimationFrame(loop); };
+  loop();
+
+  const stream = c.captureStream(30);
+  try {
+    rec.audio = await navigator.mediaDevices.getUserMedia({ audio: true });
+    rec.audio.getAudioTracks().forEach(tr => stream.addTrack(tr));
+  } catch { rec.audio = null; }                           // no mic permission: record without sound
+
+  const mime = pickMime();
+  try { rec.recorder = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 8e6 } : undefined); }
+  catch { rec.recorder = new MediaRecorder(stream); }
+  rec.chunks = [];
+  rec.recorder.ondataavailable = e => { if (e.data && e.data.size) rec.chunks.push(e.data); };
+  rec.recorder.onstop = () => {
+    cancelAnimationFrame(rec.raf);
+    if (rec.audio) rec.audio.getTracks().forEach(tr => tr.stop());
+    stream.getTracks().forEach(tr => tr.stop());
+    const type = rec.recorder.mimeType || mime || 'video/mp4';
+    const blob = new Blob(rec.chunks, { type });
+    if (blob.size) showResult(blob, 'video');
+  };
+  rec.recorder.start(1000);
+  rec.start = Date.now();
+  document.body.classList.add('recording');
+  const tick = () => {
+    const s = Math.floor((Date.now() - rec.start) / 1000);
+    $('recTime').textContent = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  };
+  tick(); rec.timer = setInterval(tick, 500);
+}
+function stopRecording() {
+  clearInterval(rec.timer);
+  document.body.classList.remove('recording');
+  if (rec.recorder && rec.recorder.state !== 'inactive') rec.recorder.stop();
+}
+
+/* Mode switch */
+state.mode = 'photo';
+$('modes').onclick = e => {
+  const s = e.target.closest('[data-mode]'); if (!s || document.body.classList.contains('recording')) return;
+  state.mode = s.dataset.mode;
+  [...$('modes').children].forEach(x => x.classList.toggle('on', x === s));
+  document.body.classList.toggle('video-mode', state.mode === 'video');
+  $('shutter').setAttribute('aria-label', state.mode === 'video' ? 'Rekam video' : 'Ambil foto');
+};
+
+$('shutter').onclick = () => {
+  if (!video.videoWidth) return;
+  if (state.mode === 'photo') return takePhoto();
+  if (document.body.classList.contains('recording')) stopRecording(); else startRecording();
 };
 
 $('thumbBtn').onclick = () => { if (state.lastUrl) openSheet('prevSheet'); };
+document.querySelectorAll('#prevSheet [data-close], #prevSheet').forEach(el => el.addEventListener('click', () => { const v = $('prevVid'); if (!v.hidden) v.pause(); }));
 
 $('saveBtn').onclick = async () => {
   if (!state.lastBlob) return;
-  const d = new Date();
-  const name = `TimeCam_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}${String(d.getSeconds()).padStart(2,'0')}.jpg`;
-  const file = new File([state.lastBlob], name, { type: 'image/jpeg' });
+  const d = new Date(), p2 = n => String(n).padStart(2, '0');
+  const isVid = state.lastKind === 'video';
+  const type = isVid ? (state.lastBlob.type.split(';')[0] || 'video/mp4') : 'image/jpeg';
+  const ext = isVid ? (type.includes('webm') ? 'webm' : 'mp4') : 'jpg';
+  const name = `TimeCam_${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}_${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}.${ext}`;
+  const file = new File([state.lastBlob], name, { type });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try { await navigator.share({ files: [file] }); return; } catch (e) { if (e.name === 'AbortError') return; }
   }
