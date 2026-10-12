@@ -81,6 +81,18 @@
   .btn:disabled { opacity:.4; }
   .preview video { max-height:55vh; object-fit:contain; width:100%; border-radius:10px; display:block; background:#000; }
 
+  /* Self-timer */
+  .timer-btn { position:relative; }
+  .timer-btn span { position:absolute; right:0; bottom:2px; font:700 11px Poppins; color:#fff; background:#111; border-radius:8px; padding:0 4px; line-height:15px; }
+  .timer-btn span:empty { display:none; }
+  .count { position:absolute; inset:0 0 35% 0; display:none; place-items:center; pointer-events:none; z-index:6;
+           color:#fff; font:300 140px/1 Oswald, sans-serif; text-shadow:0 2px 12px rgba(0,0,0,.5); }
+  .counting .count { display:grid; }
+  .count.pop { animation:pop .9s ease-out; }
+  @keyframes pop { from { transform:scale(1.4); opacity:.2; } 30% { transform:scale(1); opacity:1; } to { opacity:.85; } }
+  .counting .shutter .dot { background:rgba(255,255,255,.35); border-radius:8px; transform:scale(.42); }
+  .counting .rail, .counting .modes, .counting .thumb, .counting .team, .counting #flipBtn, .counting #timerBtn { opacity:.3; pointer-events:none; }
+
   /* Landscape: watermark rotated into the corner, like Timemark */
   .land { position:absolute; pointer-events:none; z-index:4; display:none; }
   .land .wm { position:absolute; left:14px; bottom:14px; margin:0; }
@@ -129,6 +141,7 @@
   <div class="top">
     <button class="icon-btn" id="menuBtn" aria-label="Pengaturan"><svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h14M3 18h10"/></svg></button>
     <button class="icon-btn" id="torchBtn" aria-label="Flash"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/><path d="M3 3l18 18" id="torchSlash"/></svg></button>
+    <button class="icon-btn timer-btn" id="timerBtn" aria-label="Timer"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2.5h5M19 6l1.5-1.5"/></svg><span id="timerLbl"></span></button>
     <div class="spacer"></div>
     <button class="icon-btn" id="flipBtn" aria-label="Ganti kamera"><svg viewBox="0 0 24 24"><path d="M20 15V8a3 3 0 0 0-3-3h-1.5"/><path d="M4 9v7a3 3 0 0 0 3 3h1.5"/><path d="M17.5 3 15.5 5l2 2"/><path d="M6.5 21l2-2-2-2"/><circle cx="12" cy="12" r="3"/></svg></button>
   </div>
@@ -138,6 +151,7 @@
     <div class="msg" id="msg"><div>Mengaktifkan kamera…</div></div>
     <div class="flash" id="flash"></div>
     <div class="rec" id="recTime">00:00</div>
+    <div class="count" id="count"></div>
     <div class="land" id="land"></div>
 
     <div class="rail">
@@ -648,10 +662,35 @@ $('modes').onclick = e => {
   $('shutter').setAttribute('aria-label', state.mode === 'video' ? 'Rekam video' : 'Ambil foto');
 };
 
+/* Self-timer: off → 3 s → 10 s (remembered). Works for photo and for starting a video. */
+state.timer = store.get('timer', 0);
+function showTimer() { $('timerLbl').textContent = state.timer ? state.timer + 's' : ''; }
+showTimer();
+$('timerBtn').onclick = () => {
+  state.timer = { 0: 3, 3: 10, 10: 0 }[state.timer] ?? 0;
+  store.set('timer', state.timer); showTimer();
+};
+const cd = { iv: 0 };
+function cancelCountdown() { clearInterval(cd.iv); document.body.classList.remove('counting'); }
+function countdown(secs, done) {
+  let n = secs; const el = $('count');
+  const show = () => { el.textContent = n; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); };
+  document.body.classList.add('counting'); show();
+  cd.iv = setInterval(() => {
+    n--;
+    if (n <= 0) { cancelCountdown(); done(); } else show();
+  }, 1000);
+}
+
+function shoot() {
+  if (state.mode === 'photo') takePhoto(); else startRecording();
+}
 $('shutter').onclick = () => {
   if (!video.videoWidth) return;
-  if (state.mode === 'photo') return takePhoto();
-  if (document.body.classList.contains('recording')) stopRecording(); else startRecording();
+  const b = document.body.classList;
+  if (b.contains('counting')) return cancelCountdown();          // tap again to cancel
+  if (b.contains('recording')) return stopRecording();
+  if (state.timer) countdown(state.timer, shoot); else shoot();
 };
 
 /* Edit the note on a photo after taking it (time & place stay as captured) */
