@@ -78,7 +78,7 @@
   .wm-note:empty { display:none; }
 
   /* Bottom mode bar */
-  .modes { flex:none; position:relative; z-index:3; background:#fff; padding:8px 8px 0; padding-bottom:calc(env(safe-area-inset-bottom, 0px) - 4px); display:flex; justify-content:center; align-items:flex-start; gap:56px; font-family:Poppins, system-ui, sans-serif; font-weight:600; font-size:16px; line-height:22px; color:#9a9a9a; }
+  .modes { flex:none; position:relative; z-index:3; background:#fff; padding:8px 8px 0; padding-bottom:var(--modes-pb, 6px); display:flex; justify-content:center; align-items:flex-start; gap:56px; font-family:Poppins, system-ui, sans-serif; font-weight:600; font-size:16px; line-height:22px; color:#9a9a9a; }
   .modes span { padding:2px 6px; cursor:pointer; }
   .modes span.on { color:#111; position:relative; }
   .modes span.on::after { content:""; position:absolute; left:50%; bottom:-6px; width:6px; height:6px; border-radius:50%; background:#111; transform:translateX(-50%); }
@@ -521,10 +521,18 @@ $('saveBtn').onclick = async () => {
    iOS home-screen apps often report a viewport shorter than the screen, leaving a blank strip at the bottom.
    In standalone mode use the full screen height so the bottom bar sits at the very bottom. */
 function fitHeight() {
-  const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
-  const portrait = innerHeight >= innerWidth;
-  const h = standalone && portrait ? Math.max(innerHeight, screen.height) : innerHeight;
+  // iOS may paint the strip below the web view itself (white) — content placed there gets cut off.
+  // So size the app to the real viewport, and only add bottom padding for the part of the
+  // home-indicator area that is actually inside the viewport.
+  const h = innerHeight;
   document.documentElement.style.setProperty('--app-h', h + 'px');
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;bottom:0;height:env(safe-area-inset-bottom, 0px);width:1px;visibility:hidden;pointer-events:none';
+  document.body.appendChild(probe);
+  const safe = probe.offsetHeight; probe.remove();
+  const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+  const outside = standalone && innerHeight >= innerWidth ? Math.max(0, screen.height - innerHeight) : 0;
+  document.documentElement.style.setProperty('--modes-pb', Math.max(6, safe - outside) + 'px');
 }
 fitHeight(); addEventListener('resize', fitHeight);
 // keep the right rail just above the bottom panel
