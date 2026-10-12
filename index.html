@@ -96,9 +96,6 @@
     <button class="icon-btn" id="menuBtn" aria-label="Pengaturan"><svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h14M3 18h10"/></svg></button>
     <button class="icon-btn" id="torchBtn" aria-label="Flash"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/><path d="M3 3l18 18" id="torchSlash"/></svg></button>
     <div class="spacer"></div>
-    <div class="pill"><svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>Verify Photos</div>
-    <div class="spacer"></div>
-    <button class="plus" id="plusBtn"><span>✦</span>Plus</button>
     <button class="icon-btn" id="flipBtn" aria-label="Ganti kamera"><svg viewBox="0 0 24 24"><path d="M20 15V8a3 3 0 0 0-3-3h-1.5"/><path d="M4 9v7a3 3 0 0 0 3 3h1.5"/><path d="M17.5 3 15.5 5l2 2"/><path d="M6.5 21l2-2-2-2"/><circle cx="12" cy="12" r="3"/></svg></button>
   </div>
 
@@ -322,7 +319,7 @@ function openSheet(id) { $(id).classList.add('open'); }
 document.querySelectorAll('.sheet').forEach(s => s.addEventListener('click', e => {
   if (e.target === s || e.target.hasAttribute('data-close')) s.classList.remove('open');
 }));
-$('editBtn').onclick = $('menuBtn').onclick = $('tplBtn').onclick = $('plusBtn').onclick = $('teamBtn').onclick = () => {
+$('editBtn').onclick = $('menuBtn').onclick = $('tplBtn').onclick = $('teamBtn').onclick = () => {
   $('inLoc').value = state.manualLoc; $('inNote').value = state.note; $('inCoord').checked = state.showCoord;
   openSheet('editSheet');
 };
