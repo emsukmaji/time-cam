@@ -20,7 +20,7 @@
   .app { position:fixed; top:0; left:0; right:0; height:var(--app-h, 100dvh); display:flex; flex-direction:column; }
 
   /* Top bar (matches Timemark) */
-  .top { padding:env(safe-area-inset-top) 10px 6px; display:flex; align-items:center; gap:6px; background:#fff; }
+  .top { flex:none; padding:env(safe-area-inset-top) 10px 6px; display:flex; align-items:center; gap:6px; background:#fff; }
   .icon-btn { width:42px; height:42px; border:0; background:none; display:grid; place-items:center; padding:0; flex:none; }
   .icon-btn svg { width:28px; height:28px; stroke:#111; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   .top .spacer { flex:1; }
@@ -78,8 +78,8 @@
   .wm-note:empty { display:none; }
 
   /* Bottom mode bar */
-  .modes { background:#fff; padding:8px 8px max(calc(env(safe-area-inset-bottom) - 10px), 12px); display:flex; justify-content:center; gap:56px; font:600 16px/1.2 Poppins; color:#9a9a9a; }
-  .modes span { padding:4px 6px; cursor:pointer; }
+  .modes { flex:none; position:relative; z-index:3; background:#fff; padding:8px 8px 0; padding-bottom:calc(env(safe-area-inset-bottom, 0px) - 4px); display:flex; justify-content:center; align-items:flex-start; gap:56px; font-family:Poppins, system-ui, sans-serif; font-weight:600; font-size:16px; line-height:22px; color:#9a9a9a; }
+  .modes span { padding:2px 6px; cursor:pointer; }
   .modes span.on { color:#111; position:relative; }
   .modes span.on::after { content:""; position:absolute; left:50%; bottom:-6px; width:6px; height:6px; border-radius:50%; background:#111; transform:translateX(-50%); }
 
