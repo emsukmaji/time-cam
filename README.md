@@ -20,7 +20,9 @@ Web app kamera dengan watermark jam, tanggal, lokasi, dan catatan (mirip Timemar
 - Live watermark: jam besar, garis emas, tanggal + hari, alamat dari GPS, catatan
 - Alamat otomatis (OpenStreetMap), bisa diganti manual lewat tombol edit
 - Ganti kamera depan/belakang, zoom digital 1x / 1.5x / 2x
-- Foto disimpan lewat share sheet → **Save Image** masuk ke Photos
+- Mode Foto & Video, watermark ikut berputar saat HP landscape
+- Galeri dalam app: semua hasil tersimpan sampai dihapus, bisa simpan banyak sekaligus ke Photos lewat share sheet → **Save Images**
+- Catatan foto bisa diedit setelah foto diambil
 
 ## Batasan di iPhone (web app)
 

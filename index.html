@@ -65,7 +65,21 @@
   .recording .rec { display:block; }
   .recording .rail, .recording #flipBtn, .recording .modes, .recording .thumb, .recording .team { opacity:.3; pointer-events:none; }
   [hidden] { display:none !important; }
-  .preview video { width:100%; border-radius:10px; display:block; background:#000; }
+  #prevSheet { z-index:20; }
+  .galhead { display:flex; align-items:center; gap:14px; margin-bottom:10px; }
+  .galhead h3 { margin:0; flex:1; }
+  .link { border:0; background:none; font:600 15px Poppins; color:#b8860b; padding:6px 2px; }
+  .ggrid { display:grid; grid-template-columns:repeat(3, 1fr); gap:4px; max-height:58vh; overflow:auto; border-radius:10px; }
+  .gitem { position:relative; aspect-ratio:3/4; border:0; padding:0; border-radius:4px; background:#222 center/cover; }
+  .gvid { position:absolute; left:5px; bottom:5px; color:#fff; font:600 11px Poppins; text-shadow:0 1px 2px #000; }
+  .gsaved { position:absolute; right:5px; bottom:4px; color:#fff; font:700 13px Poppins; background:rgba(0,0,0,.45); border-radius:50%; width:20px; height:20px; display:grid; place-items:center; }
+  .gcheck { display:none; position:absolute; top:6px; right:6px; width:22px; height:22px; border-radius:50%; border:2px solid #fff; background:rgba(0,0,0,.25); }
+  .selecting .gcheck { display:block; }
+  .gitem.picked .gcheck { background:var(--gold); }
+  .gitem.picked::after { content:"✓"; position:absolute; top:6px; right:6px; width:22px; height:22px; display:grid; place-items:center; color:#111; font:700 13px Poppins; }
+  .selecting .gitem.picked { outline:3px solid var(--gold); outline-offset:-3px; }
+  .btn:disabled { opacity:.4; }
+  .preview video { max-height:55vh; object-fit:contain; width:100%; border-radius:10px; display:block; background:#000; }
 
   /* Landscape: watermark rotated into the corner, like Timemark */
   .land { position:absolute; pointer-events:none; z-index:4; display:none; }
@@ -186,8 +200,19 @@
         <button class="btn" id="applyNote" style="flex:none;padding:10px 16px">Ubah</button>
       </div>
     </div>
-    <div class="row"><button class="btn alt" data-close>Tutup</button><button class="btn gold" id="saveBtn">Simpan ke Foto</button></div>
+    <div class="row"><button class="btn alt" id="prevDel" style="flex:none;padding:13px 16px" aria-label="Hapus">🗑</button><button class="btn alt" data-close>Tutup</button><button class="btn gold" id="saveBtn">Simpan ke Foto</button></div>
     <div class="hint">Di iPhone: tekan "Simpan ke Foto" → pilih <b>Save Image</b> / <b>Save Video</b>. Atau tekan-tahan gambar → Save to Photos.</div>
+  </div>
+</div>
+
+<!-- Gallery sheet -->
+<div class="sheet" id="galSheet">
+  <div class="card gal">
+    <div class="galhead"><h3 id="galTitle">Galeri</h3><button class="link" id="galAll" hidden>Pilih semua</button><button class="link" id="galSelect">Pilih</button></div>
+    <div class="hint" id="galEmpty" hidden>Belum ada foto atau video.</div>
+    <div class="ggrid" id="galGrid"></div>
+    <div class="row"><button class="btn alt" data-close>Tutup</button><button class="btn alt" id="galDel" hidden>Hapus</button><button class="btn gold" id="galSave">Simpan</button></div>
+    <div class="hint">Foto &amp; video tersimpan di app sampai kamu hapus. "Simpan ke Foto" membuka share sheet → pilih <b>Save Images</b> untuk menyimpan semuanya sekaligus. ✓ = sudah disimpan.</div>
   </div>
 </div>
 
@@ -476,44 +501,87 @@ function drawFrame(ctx, W, H, rot = 0, withWm = true) {
   if (withWm) drawWatermark(ctx, W, H, Math.min(W, H) / 390 * 0.82);
 }
 const outSize = (w, h, rot) => rot ? { W: h, H: w } : { W: w, H: h };
-function showResult(blob, kind, open = true) {
-  if (state.lastUrl) URL.revokeObjectURL(state.lastUrl);
-  state.lastBlob = blob; state.lastKind = kind; state.lastUrl = URL.createObjectURL(blob);
-  const img = $('prevImg'), vid = $('prevVid');
-  if (kind === 'photo') {
-    $('thumbBox').style.backgroundImage = `url(${state.lastUrl})`;
-    img.hidden = false; img.src = state.lastUrl; vid.hidden = true; vid.removeAttribute('src');
-  } else {
-    img.hidden = true; vid.hidden = false; vid.src = state.lastUrl;
+/* ---------- Gallery storage (IndexedDB) ----------
+   Every photo/video is kept on the phone inside the app until you delete it,
+   so nothing is lost if the app closes before you save it to Photos. */
+const db = {
+  _p: null,
+  open() {
+    return this._p || (this._p = new Promise((res, rej) => {
+      const r = indexedDB.open('timecam', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('items', { keyPath: 'id' });
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    }));
+  },
+  async tx(mode, fn) {
+    const d = await this.open();
+    return new Promise((res, rej) => {
+      const t = d.transaction('items', mode), s = t.objectStore('items');
+      const out = fn(s); t.oncomplete = () => res(out && out.result !== undefined ? out.result : out); t.onerror = () => rej(t.error);
+    });
+  },
+  put(item) { return this.tx('readwrite', s => s.put(item)); },
+  del(id) { return this.tx('readwrite', s => s.delete(id)); },
+  async all() {
+    const d = await this.open();
+    return new Promise((res, rej) => {
+      const r = d.transaction('items').objectStore('items').getAll();
+      r.onsuccess = () => res(r.result.sort((a, b) => b.time - a.time)); r.onerror = () => rej(r.error);
+    });
   }
-  const canEdit = kind === 'photo' && state.lastShot;
-  $('noteEdit').hidden = !canEdit;
-  if (canEdit && open) $('prevNote').value = state.lastShot.snap.note;
-  if (open) openSheet('prevSheet');
+};
+try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch {}
+
+function makeThumb(src, w, h) {
+  const s = 240 / Math.max(w, h), c = document.createElement('canvas');
+  c.width = Math.round(w * s); c.height = Math.round(h * s);
+  c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.7);
+}
+const toBlob = (c, type = 'image/jpeg', q = 0.92) => new Promise(r => c.toBlob(r, type, q));
+function setThumbBtn(item) { $('thumbBox').style.backgroundImage = item ? `url(${item.thumb})` : ''; }
+db.all().then(items => setThumbBtn(items[0])).catch(() => {});
+
+/* ---------- Preview of one item ---------- */
+function showItem(item) {
+  state.current = item;
+  if (state.curUrl) URL.revokeObjectURL(state.curUrl);
+  state.curUrl = URL.createObjectURL(item.blob);
+  const img = $('prevImg'), vid = $('prevVid');
+  if (item.kind === 'photo') { img.hidden = false; img.src = state.curUrl; vid.hidden = true; vid.removeAttribute('src'); }
+  else { img.hidden = true; vid.hidden = false; vid.src = state.curUrl; }
+  $('noteEdit').hidden = !(item.kind === 'photo' && item.raw);
+  if (item.snap) $('prevNote').value = item.snap.note;
+  openSheet('prevSheet');
 }
 
-function takePhoto() {
+/* Draw the watermark onto the clean photo (used when taking and when editing the note) */
+async function renderPhoto(item) {
+  const bmp = await createImageBitmap(item.raw);
+  const c = $('canvas'); c.width = bmp.width; c.height = bmp.height;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(bmp, 0, 0);
+  drawWatermark(ctx, c.width, c.height, Math.min(c.width, c.height) / 390 * 0.82, { ...item.snap, date: new Date(item.snap.date) });
+  item.blob = await toBlob(c);
+  item.thumb = makeThumb(c, c.width, c.height);
+}
+
+async function takePhoto() {
   const f = $('flash'); f.classList.add('go'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('go')));
   const fr = frameRect(), rot = state.rot;
   const { W, H } = outSize(fr.W, fr.H, rot);
-  // keep the clean photo (no watermark) and the time/place at the moment of the shot,
-  // so the note can still be edited afterwards without changing time or location
+  // keep the clean photo + the time/place at the moment of the shot, so the note can be edited later
   const raw = document.createElement('canvas'); raw.width = W; raw.height = H;
   drawFrame(raw.getContext('2d'), W, H, rot, false);
-  state.lastShot = { raw, W, H, snap: { date: new Date(), loc: locText(), note: state.note } };
-  renderShot(true);
-}
-function renderShot(open) {
-  const s = state.lastShot; if (!s) return;
-  const c = $('canvas'); c.width = s.W; c.height = s.H;
-  const ctx = c.getContext('2d');
-  ctx.drawImage(s.raw, 0, 0);
-  drawWatermark(ctx, s.W, s.H, Math.min(s.W, s.H) / 390 * 0.82, s.snap);
-  c.toBlob(blob => showResult(blob, 'photo', open), 'image/jpeg', 0.92);
+  const item = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), kind: 'photo', time: Date.now(), saved: false,
+                 raw: await toBlob(raw, 'image/jpeg', 0.95), snap: { date: Date.now(), loc: locText(), note: state.note } };
+  await renderPhoto(item);
+  showItem(item); setThumbBtn(item);
+  db.put(item).catch(() => alert('Penyimpanan HP penuh — foto belum tersimpan di galeri app. Simpan ke Photos sekarang.'));
 }
 
 /* Video: draw camera + live watermark onto a canvas and record that canvas */
-const rec = { recorder: null, chunks: [], raf: 0, timer: 0, start: 0, audio: null, canvas: null };
+const rec = { recorder: null, chunks: [], raf: 0, timer: 0, start: 0, audio: null, canvas: null, thumb: '' };
 function pickMime() {
   const opts = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
   return opts.find(m => window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) || '';
@@ -530,6 +598,7 @@ async function startRecording() {
   const ctx = c.getContext('2d');
   const loop = () => { drawFrame(ctx, W, H, rot); rec.raf = requestAnimationFrame(loop); };
   loop();
+  rec.thumb = makeThumb(c, W, H);
 
   const stream = c.captureStream(30);
   try {
@@ -548,7 +617,11 @@ async function startRecording() {
     stream.getTracks().forEach(tr => tr.stop());
     const type = rec.recorder.mimeType || mime || 'video/mp4';
     const blob = new Blob(rec.chunks, { type });
-    if (blob.size) showResult(blob, 'video');
+    if (!blob.size) return;
+    const item = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), kind: 'video', time: rec.start, saved: false,
+                   blob, thumb: rec.thumb, dur: Math.round((Date.now() - rec.start) / 1000) };
+    showItem(item); setThumbBtn(item);
+    db.put(item).catch(() => alert('Penyimpanan HP penuh — video belum tersimpan di galeri app. Simpan ke Photos sekarang.'));
   };
   rec.recorder.start(1000);
   rec.start = Date.now();
@@ -581,29 +654,108 @@ $('shutter').onclick = () => {
   if (document.body.classList.contains('recording')) stopRecording(); else startRecording();
 };
 
-$('applyNote').onclick = () => {
-  const s = state.lastShot; if (!s) return;
-  s.snap.note = $('prevNote').value.trim();
-  // the last edited note also becomes the note for the next photos
-  state.note = s.snap.note; store.set('note', state.note); renderWm();
-  renderShot(false);
+/* Edit the note on a photo after taking it (time & place stay as captured) */
+$('applyNote').onclick = async () => {
+  const item = state.current; if (!item || !item.raw) return;
+  item.snap.note = $('prevNote').value.trim();
+  state.note = item.snap.note; store.set('note', state.note); renderWm();   // becomes the note for next shots
+  await renderPhoto(item);
+  item.saved = false;
+  if (state.curUrl) URL.revokeObjectURL(state.curUrl);
+  state.curUrl = URL.createObjectURL(item.blob); $('prevImg').src = state.curUrl;
+  db.put(item).catch(() => {});
+  if (state.galleryOpen) renderGallery();
+  db.all().then(items => setThumbBtn(items[0])).catch(() => {});
 };
 $('prevNote').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('applyNote').click(); $('prevNote').blur(); } });
-$('thumbBtn').onclick = () => { if (state.lastUrl) openSheet('prevSheet'); };
 document.querySelectorAll('#prevSheet [data-close], #prevSheet').forEach(el => el.addEventListener('click', () => { const v = $('prevVid'); if (!v.hidden) v.pause(); }));
 
-$('saveBtn').onclick = async () => {
-  if (!state.lastBlob) return;
-  const d = new Date(), p2 = n => String(n).padStart(2, '0');
-  const isVid = state.lastKind === 'video';
-  const type = isVid ? (state.lastBlob.type.split(';')[0] || 'video/mp4') : 'image/jpeg';
+/* ---------- Saving to Photos (share sheet) ---------- */
+function fileFor(item) {
+  const d = new Date(item.time), p2 = n => String(n).padStart(2, '0');
+  const isVid = item.kind === 'video';
+  const type = isVid ? (item.blob.type.split(';')[0] || 'video/mp4') : 'image/jpeg';
   const ext = isVid ? (type.includes('webm') ? 'webm' : 'mp4') : 'jpg';
   const name = `TimeCam_${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}_${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}.${ext}`;
-  const file = new File([state.lastBlob], name, { type });
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file] }); return; } catch (e) { if (e.name === 'AbortError') return; }
+  return new File([item.blob], name, { type });
+}
+async function saveItems(items) {
+  if (!items.length) return false;
+  const files = items.map(fileFor);
+  if (navigator.canShare && navigator.canShare({ files })) {
+    try { await navigator.share({ files }); }
+    catch (e) { return false; }                       // cancelled
+  } else {
+    files.forEach(f => { const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; a.click(); });
   }
-  const a = document.createElement('a'); a.href = state.lastUrl; a.download = name; a.click();
+  for (const it of items) { it.saved = true; await db.put(it).catch(() => {}); }
+  return true;
+}
+$('saveBtn').onclick = async () => {
+  if (!state.current) return;
+  if (await saveItems([state.current]) && state.galleryOpen) renderGallery();
+};
+
+/* ---------- Gallery sheet ---------- */
+const gal = { items: [], select: false, picked: new Set(), urls: [] };
+async function renderGallery() {
+  gal.items = await db.all().catch(() => []);
+  const grid = $('galGrid');
+  grid.innerHTML = '';
+  $('galTitle').textContent = `Galeri (${gal.items.length})`;
+  $('galEmpty').hidden = gal.items.length > 0;
+  for (const it of gal.items) {
+    const b = document.createElement('button');
+    b.className = 'gitem' + (gal.picked.has(it.id) ? ' picked' : '');
+    b.style.backgroundImage = `url(${it.thumb})`;
+    b.innerHTML = (it.kind === 'video' ? `<span class="gvid">▶ ${it.dur ? Math.floor(it.dur / 60) + ':' + String(it.dur % 60).padStart(2, '0') : ''}</span>` : '') +
+                  (it.saved ? '<span class="gsaved">✓</span>' : '') + '<span class="gcheck"></span>';
+    b.onclick = () => {
+      if (gal.select) { gal.picked.has(it.id) ? gal.picked.delete(it.id) : gal.picked.add(it.id); b.classList.toggle('picked'); updateGalBar(); }
+      else showItem(it);
+    };
+    grid.appendChild(b);
+  }
+  updateGalBar();
+}
+function updateGalBar() {
+  const n = gal.picked.size;
+  document.getElementById('galSheet').classList.toggle('selecting', gal.select);
+  $('galSelect').textContent = gal.select ? 'Batal' : 'Pilih';
+  $('galAll').hidden = !gal.select;
+  $('galAll').textContent = n === gal.items.length && n ? 'Kosongkan' : 'Pilih semua';
+  $('galSave').textContent = gal.select ? `Simpan ke Foto (${n})` : 'Simpan yang belum (' + gal.items.filter(i => !i.saved).length + ')';
+  $('galSave').disabled = gal.select ? !n : !gal.items.some(i => !i.saved);
+  $('galDel').hidden = !gal.select; $('galDel').disabled = !n;
+  $('galDel').textContent = `Hapus (${n})`;
+}
+$('thumbBtn').onclick = () => { gal.select = false; gal.picked.clear(); state.galleryOpen = true; openSheet('galSheet'); renderGallery(); };
+$('galSheet').addEventListener('click', e => { if (e.target.id === 'galSheet' || e.target.hasAttribute('data-close')) state.galleryOpen = false; });
+$('galSelect').onclick = () => { gal.select = !gal.select; gal.picked.clear(); renderGallery(); };
+$('galAll').onclick = () => {
+  if (gal.picked.size === gal.items.length) gal.picked.clear(); else gal.items.forEach(i => gal.picked.add(i.id));
+  renderGallery();
+};
+$('galSave').onclick = async () => {
+  const list = gal.select ? gal.items.filter(i => gal.picked.has(i.id)) : gal.items.filter(i => !i.saved);
+  if (await saveItems(list)) { gal.select = false; gal.picked.clear(); renderGallery(); }
+};
+$('galDel').onclick = async () => {
+  const n = gal.picked.size; if (!n) return;
+  const unsaved = gal.items.filter(i => gal.picked.has(i.id) && !i.saved).length;
+  if (!confirm(`Hapus ${n} item dari galeri app?` + (unsaved ? `\n${unsaved} di antaranya belum disimpan ke Photos.` : ''))) return;
+  for (const id of gal.picked) await db.del(id).catch(() => {});
+  gal.select = false; gal.picked.clear();
+  await renderGallery();
+  setThumbBtn(gal.items[0]);
+};
+$('prevDel').onclick = async () => {
+  const it = state.current; if (!it) return;
+  if (!confirm('Hapus item ini dari galeri app?' + (it.saved ? '' : '\nBelum disimpan ke Photos.'))) return;
+  await db.del(it.id).catch(() => {});
+  $('prevSheet').classList.remove('open');
+  const items = await db.all().catch(() => []); setThumbBtn(items[0]);
+  if (state.galleryOpen) renderGallery();
 };
 
 /* ---------- Full-screen height ----------
