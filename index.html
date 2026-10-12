@@ -67,6 +67,14 @@
   [hidden] { display:none !important; }
   .preview video { width:100%; border-radius:10px; display:block; background:#000; }
 
+  /* Landscape: watermark rotated into the corner, like Timemark */
+  .land { position:absolute; pointer-events:none; z-index:4; display:none; }
+  .land .wm { position:absolute; left:14px; bottom:14px; margin:0; }
+  .is-land .land { display:block; }
+  .zoom button, .side svg, .thumb .box, .tpl svg { transition:transform .3s; }
+  .rot-ccw .zoom button, .rot-ccw .side svg, .rot-ccw .thumb .box, .rot-ccw .tpl svg { transform:rotate(-90deg); }
+  .rot-cw .zoom button, .rot-cw .side svg, .rot-cw .thumb .box, .rot-cw .tpl svg { transform:rotate(90deg); }
+
   /* Watermark — same proportions as the saved photo (0.82 of a 390px layout) */
   .wm { position:relative; margin:8px 14px 0; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.35); pointer-events:none; }
   .wm-row { display:flex; align-items:stretch; gap:10px; }
@@ -116,6 +124,7 @@
     <div class="msg" id="msg"><div>Mengaktifkan kamera…</div></div>
     <div class="flash" id="flash"></div>
     <div class="rec" id="recTime">00:00</div>
+    <div class="land" id="land"></div>
 
     <div class="rail">
       <div class="zoom" id="zoom">
@@ -404,14 +413,20 @@ function frameRect() {
   const sw = cw / state.zoom, sh = ch / state.zoom;
   return { sx: (vw - sw) / 2, sy: (vh - sh) / 2, sw, sh, W: Math.round(cw), H: Math.round(ch) };
 }
-function drawFrame(ctx, W, H) {
+// rot: 0 = portrait, -90 = phone turned left (top to the left), 90 = turned right
+// W,H are the OUTPUT size (landscape output is wider than tall)
+function drawFrame(ctx, W, H, rot = 0) {
   const r = frameRect();
+  const pw = rot ? H : W, ph = rot ? W : H;            // portrait-space size of the camera image
   ctx.save();
-  if (state.facing === 'user') { ctx.translate(W, 0); ctx.scale(-1, 1); }
-  ctx.drawImage(video, r.sx, r.sy, r.sw, r.sh, 0, 0, W, H);
+  if (rot === -90) { ctx.translate(0, H); ctx.rotate(-Math.PI / 2); }
+  else if (rot === 90) { ctx.translate(W, 0); ctx.rotate(Math.PI / 2); }
+  if (state.facing === 'user') { ctx.translate(pw, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(video, r.sx, r.sy, r.sw, r.sh, 0, 0, pw, ph);
   ctx.restore();
   drawWatermark(ctx, W, H, Math.min(W, H) / 390 * 0.82);
 }
+const outSize = (w, h, rot) => rot ? { W: h, H: w } : { W: w, H: h };
 function showResult(blob, kind) {
   if (state.lastUrl) URL.revokeObjectURL(state.lastUrl);
   state.lastBlob = blob; state.lastKind = kind; state.lastUrl = URL.createObjectURL(blob);
@@ -427,9 +442,10 @@ function showResult(blob, kind) {
 
 function takePhoto() {
   const f = $('flash'); f.classList.add('go'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('go')));
-  const { W, H } = frameRect();
+  const fr = frameRect(), rot = state.rot;
+  const { W, H } = outSize(fr.W, fr.H, rot);
   const c = $('canvas'); c.width = W; c.height = H;
-  drawFrame(c.getContext('2d'), W, H);
+  drawFrame(c.getContext('2d'), W, H, rot);
   c.toBlob(blob => showResult(blob, 'photo'), 'image/jpeg', 0.92);
 }
 
@@ -443,11 +459,13 @@ async function startRecording() {
   if (!window.MediaRecorder) { alert('Browser ini belum mendukung rekam video.'); return; }
   const fr = frameRect();
   const scale = Math.min(1, 1080 / fr.W);                 // cap at 1080x1920 so the phone keeps up
-  const W = Math.round(fr.W * scale / 2) * 2, H = Math.round(fr.H * scale / 2) * 2;
+  const pw = Math.round(fr.W * scale / 2) * 2, ph = Math.round(fr.H * scale / 2) * 2;
+  const rot = state.rot;                                   // orientation is fixed for the whole clip
+  const { W, H } = outSize(pw, ph, rot);
   const c = rec.canvas || (rec.canvas = document.createElement('canvas'));
   c.width = W; c.height = H;
   const ctx = c.getContext('2d');
-  const loop = () => { drawFrame(ctx, W, H); rec.raf = requestAnimationFrame(loop); };
+  const loop = () => { drawFrame(ctx, W, H, rot); rec.raf = requestAnimationFrame(loop); };
   loop();
 
   const stream = c.captureStream(30);
@@ -537,6 +555,42 @@ function fitHeight() {
 fitHeight(); addEventListener('resize', fitHeight);
 // keep the right rail just above the bottom panel
 try { new ResizeObserver(() => document.documentElement.style.setProperty('--panel-h', $('panel').offsetHeight + 'px')).observe($('panel')); } catch {} addEventListener('orientationchange', () => setTimeout(fitHeight, 300));
+
+/* ---------- Phone orientation (UI stays portrait; watermark & photo follow the phone) ---------- */
+state.rot = 0;
+function setRot(rot) {
+  if (rot === state.rot || document.body.classList.contains('recording')) return;
+  state.rot = rot;
+  const b = document.body, wm = $('wm'), land = $('land'), stage = $('stage');
+  b.classList.toggle('is-land', !!rot); b.classList.toggle('rot-ccw', rot === -90); b.classList.toggle('rot-cw', rot === 90);
+  if (rot) {
+    const W = stage.clientWidth, H = stage.clientHeight;
+    Object.assign(land.style, { width: H + 'px', height: W + 'px', left: (W - H) / 2 + 'px', top: (H - W) / 2 + 'px', transform: `rotate(${rot}deg)` });
+    land.appendChild(wm);
+  } else {
+    $('panel').appendChild(wm);
+  }
+}
+addEventListener('resize', () => { if (state.rot) { const r = state.rot; state.rot = 0; setRot(r); } });
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function onMotion(e) {
+  const g = e.accelerationIncludingGravity; if (!g || g.x == null) return;
+  const x = isIOS ? g.x : -g.x, y = isIOS ? g.y : -g.y;    // iOS reports gravity with the opposite sign to Android
+  if (Math.abs(x) > 6 && Math.abs(x) > Math.abs(y) * 1.3) setRot(x > 0 ? -90 : 90);
+  else if (Math.abs(y) > 6 && Math.abs(y) > Math.abs(x) * 1.3) setRot(0);
+}
+function startMotion() {
+  if (startMotion.on) return; startMotion.on = true;
+  addEventListener('devicemotion', onMotion);
+}
+// iOS needs permission for motion sensors, and only from a tap
+if (window.DeviceMotionEvent && typeof DeviceMotionEvent.requestPermission === 'function') {
+  const ask = () => {
+    DeviceMotionEvent.requestPermission().then(s => { if (s === 'granted') startMotion(); }).catch(() => {});
+    removeEventListener('click', ask, true);
+  };
+  addEventListener('click', ask, true);
+} else if (window.DeviceMotionEvent) startMotion();
 
 /* ---------- Boot ---------- */
 document.fonts && document.fonts.load('300 64px Oswald');
