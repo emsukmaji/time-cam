@@ -105,7 +105,7 @@
   .btn { flex:1; border:0; border-radius:12px; padding:13px; font:600 16px Poppins; background:#111; color:#fff; }
   .btn.alt { background:#eee; color:#111; }
   .btn.gold { background:var(--gold); color:#111; }
-  .preview img { width:100%; border-radius:10px; display:block; }
+  .preview img { width:100%; max-height:55vh; object-fit:contain; background:#000; border-radius:10px; display:block; }
   .hint { font-size:12px; color:#888; margin-top:10px; text-align:center; }
   .toggle { display:flex; align-items:center; justify-content:space-between; margin-top:14px; font-size:15px; }
 </style>
@@ -179,6 +179,13 @@
   <div class="card preview">
     <img id="prevImg" alt="Hasil foto">
     <video id="prevVid" controls playsinline hidden></video>
+    <div id="noteEdit" hidden>
+      <label for="prevNote">Catatan di foto ini</label>
+      <div class="row" style="margin-top:4px">
+        <input id="prevNote" placeholder="Tulis catatan…" style="flex:1">
+        <button class="btn" id="applyNote" style="flex:none;padding:10px 16px">Ubah</button>
+      </div>
+    </div>
     <div class="row"><button class="btn alt" data-close>Tutup</button><button class="btn gold" id="saveBtn">Simpan ke Foto</button></div>
     <div class="hint">Di iPhone: tekan "Simpan ke Foto" → pilih <b>Save Image</b> / <b>Save Video</b>. Atau tekan-tahan gambar → Save to Photos.</div>
   </div>
@@ -394,14 +401,14 @@ $('saveEdit').onclick = () => {
 };
 
 /* ---------- Capture ---------- */
-function drawWatermark(ctx, W, H, s) {   // s = canvas px per on-screen CSS px
+function drawWatermark(ctx, W, H, s, snap) {   // s = canvas px per on-screen CSS px; snap = frozen time/place/note
   const pad = 16 * s;
-  const d = new Date();
+  const d = snap ? snap.date : new Date();
   const time = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
   const date = `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
   const day = DAYS[d.getDay()];
-  const locLines = locText().split('\n');
-  const note = state.note;
+  const locLines = (snap ? snap.loc : locText()).split('\n');
+  const note = snap ? snap.note : state.note;
 
   ctx.save();
   ctx.fillStyle = '#fff'; ctx.textBaseline = 'alphabetic';
@@ -455,7 +462,7 @@ function frameRect() {
 }
 // rot: 0 = portrait, -90 = phone turned right (top to the right), 90 = turned left
 // W,H are the OUTPUT size (landscape output is wider than tall)
-function drawFrame(ctx, W, H, rot = 0) {
+function drawFrame(ctx, W, H, rot = 0, withWm = true) {
   const r = frameRect();
   const pw = rot ? H : W, ph = rot ? W : H;            // portrait-space size of the camera image
   ctx.save();
@@ -466,10 +473,10 @@ function drawFrame(ctx, W, H, rot = 0) {
   if (state.facing === 'user') { ctx.translate(pw, 0); ctx.scale(-1, 1); }
   ctx.drawImage(video, r.sx, r.sy, r.sw, r.sh, 0, 0, pw, ph);
   ctx.restore();
-  drawWatermark(ctx, W, H, Math.min(W, H) / 390 * 0.82);
+  if (withWm) drawWatermark(ctx, W, H, Math.min(W, H) / 390 * 0.82);
 }
 const outSize = (w, h, rot) => rot ? { W: h, H: w } : { W: w, H: h };
-function showResult(blob, kind) {
+function showResult(blob, kind, open = true) {
   if (state.lastUrl) URL.revokeObjectURL(state.lastUrl);
   state.lastBlob = blob; state.lastKind = kind; state.lastUrl = URL.createObjectURL(blob);
   const img = $('prevImg'), vid = $('prevVid');
@@ -479,16 +486,30 @@ function showResult(blob, kind) {
   } else {
     img.hidden = true; vid.hidden = false; vid.src = state.lastUrl;
   }
-  openSheet('prevSheet');
+  const canEdit = kind === 'photo' && state.lastShot;
+  $('noteEdit').hidden = !canEdit;
+  if (canEdit && open) $('prevNote').value = state.lastShot.snap.note;
+  if (open) openSheet('prevSheet');
 }
 
 function takePhoto() {
   const f = $('flash'); f.classList.add('go'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('go')));
   const fr = frameRect(), rot = state.rot;
   const { W, H } = outSize(fr.W, fr.H, rot);
-  const c = $('canvas'); c.width = W; c.height = H;
-  drawFrame(c.getContext('2d'), W, H, rot);
-  c.toBlob(blob => showResult(blob, 'photo'), 'image/jpeg', 0.92);
+  // keep the clean photo (no watermark) and the time/place at the moment of the shot,
+  // so the note can still be edited afterwards without changing time or location
+  const raw = document.createElement('canvas'); raw.width = W; raw.height = H;
+  drawFrame(raw.getContext('2d'), W, H, rot, false);
+  state.lastShot = { raw, W, H, snap: { date: new Date(), loc: locText(), note: state.note } };
+  renderShot(true);
+}
+function renderShot(open) {
+  const s = state.lastShot; if (!s) return;
+  const c = $('canvas'); c.width = s.W; c.height = s.H;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(s.raw, 0, 0);
+  drawWatermark(ctx, s.W, s.H, Math.min(s.W, s.H) / 390 * 0.82, s.snap);
+  c.toBlob(blob => showResult(blob, 'photo', open), 'image/jpeg', 0.92);
 }
 
 /* Video: draw camera + live watermark onto a canvas and record that canvas */
@@ -560,6 +581,12 @@ $('shutter').onclick = () => {
   if (document.body.classList.contains('recording')) stopRecording(); else startRecording();
 };
 
+$('applyNote').onclick = () => {
+  const s = state.lastShot; if (!s) return;
+  s.snap.note = $('prevNote').value.trim();
+  renderShot(false);
+};
+$('prevNote').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('applyNote').click(); $('prevNote').blur(); } });
 $('thumbBtn').onclick = () => { if (state.lastUrl) openSheet('prevSheet'); };
 document.querySelectorAll('#prevSheet [data-close], #prevSheet').forEach(el => el.addEventListener('click', () => { const v = $('prevVid'); if (!v.hidden) v.pause(); }));
 
