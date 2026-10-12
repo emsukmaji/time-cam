@@ -584,6 +584,8 @@ $('shutter').onclick = () => {
 $('applyNote').onclick = () => {
   const s = state.lastShot; if (!s) return;
   s.snap.note = $('prevNote').value.trim();
+  // the last edited note also becomes the note for the next photos
+  state.note = s.snap.note; store.set('note', state.note); renderWm();
   renderShot(false);
 };
 $('prevNote').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('applyNote').click(); $('prevNote').blur(); } });
