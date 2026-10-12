@@ -413,14 +413,16 @@ function frameRect() {
   const sw = cw / state.zoom, sh = ch / state.zoom;
   return { sx: (vw - sw) / 2, sy: (vh - sh) / 2, sw, sh, W: Math.round(cw), H: Math.round(ch) };
 }
-// rot: 0 = portrait, -90 = phone turned left (top to the left), 90 = turned right
+// rot: 0 = portrait, -90 = phone turned right (top to the right), 90 = turned left
 // W,H are the OUTPUT size (landscape output is wider than tall)
 function drawFrame(ctx, W, H, rot = 0) {
   const r = frameRect();
   const pw = rot ? H : W, ph = rot ? W : H;            // portrait-space size of the camera image
   ctx.save();
-  if (rot === -90) { ctx.translate(0, H); ctx.rotate(-Math.PI / 2); }
-  else if (rot === 90) { ctx.translate(W, 0); ctx.rotate(Math.PI / 2); }
+  // The camera image is turned the OPPOSITE way to the watermark: phone turned right (rot -90) means
+  // the real "up" is the screen's left edge, so the image is rotated clockwise to stand upright.
+  if (rot === -90) { ctx.translate(W, 0); ctx.rotate(Math.PI / 2); }
+  else if (rot === 90) { ctx.translate(0, H); ctx.rotate(-Math.PI / 2); }
   if (state.facing === 'user') { ctx.translate(pw, 0); ctx.scale(-1, 1); }
   ctx.drawImage(video, r.sx, r.sy, r.sw, r.sh, 0, 0, pw, ph);
   ctx.restore();
