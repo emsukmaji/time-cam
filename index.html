@@ -196,8 +196,8 @@ async function startCamera() {
   msg.innerHTML = '<div>Mengaktifkan kamera…<br><small>Izinkan akses kamera jika diminta</small></div>';
   // Try high resolution first, then fall back if the browser refuses or stalls
   const tries = [
-    { facingMode: { ideal: state.facing }, width: { ideal: 3840 }, height: { ideal: 2160 } },
-    { facingMode: { ideal: state.facing }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+    { facingMode: { ideal: state.facing }, width: { ideal: 3840 }, height: { ideal: 2160 }, aspectRatio: { ideal: 16 / 9 } },
+    { facingMode: { ideal: state.facing }, width: { ideal: 1920 }, height: { ideal: 1080 }, aspectRatio: { ideal: 16 / 9 } },
     { facingMode: state.facing }
   ];
   let lastErr;
@@ -340,11 +340,14 @@ $('shutter').onclick = async () => {
 
   // Use the camera's full frame (9:16 portrait on iPhone, like Timemark) at full resolution
   const stage = $('stage').getBoundingClientRect();
+  // Always output exactly 9:16 portrait (like Timemark), center-cropped from whatever the camera gives
   const vw = video.videoWidth, vh = video.videoHeight;
-  const sw = vw / state.zoom, sh = vh / state.zoom;
+  const R = 9 / 16;
+  let cw = vw, ch = vh;
+  if (vw / vh > R) cw = vh * R; else ch = vw / R;
+  const W = Math.round(cw), H = Math.round(ch);          // full-res 9:16 at 1x
+  const sw = cw / state.zoom, sh = ch / state.zoom;       // digital zoom crops further
   const sx = (vw - sw) / 2, sy = (vh - sh) / 2;
-
-  const W = vw, H = vh;
   const c = $('canvas'); c.width = W; c.height = H;
   const ctx = c.getContext('2d');
   ctx.save();
