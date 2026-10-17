@@ -391,15 +391,28 @@ async function reverseGeocode(lat, lon) {
   try {
     const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=id&zoom=18&addressdetails=1`);
     const j = await r.json(); const a = j.address || {};
-    const street = [a.house_number, a.road || a.pedestrian || a.footway || a.residential].filter(Boolean).join(' ');
-    const area = a.neighbourhood || a.quarter || a.hamlet || a.village || a.suburb;
-    const city = a.city || a.town || a.municipality || a.county || a.city_district;
-    const parts = [street, area, city, [a.state, a.postcode].filter(Boolean).join(' ')].filter(Boolean);
-    const seen = new Set(), uniq = parts.filter(x => !seen.has(x) && seen.add(x));
-    const text = uniq.length ? uniq.join(', ') : j.display_name;
+    const text = formatAddress(j, a) || j.display_name;
     geoCache.key = key; geoCache.text = text;
     return text;
   } catch { return `${lat.toFixed(5)}, ${lon.toFixed(5)}`; }
+}
+// Short, Timemark-like address: [place name], street, kelurahan, kota, provinsi
+function formatAddress(j, a) {
+  const short = s => (s || '')
+    .replace(/^Jalan\s+/i, 'Jl. ').replace(/\bKyai Haji\b/g, 'KH').replace(/\bHaji\b/g, 'H.')
+    .replace(/^Daerah Khusus Ibukota Jakarta$/i, 'DKI Jakarta').replace(/^Daerah Khusus Jakarta$/i, 'DKI Jakarta')
+    .replace(/^Daerah Istimewa Yogyakarta$/i, 'DI Yogyakarta').replace(/^Kota\s+/i, '').replace(/^Kabupaten\s+/i, 'Kab. ')
+    .trim();
+  const poiCats = ['amenity', 'building', 'tourism', 'leisure', 'historic', 'office', 'shop', 'aeroway', 'railway', 'man_made'];
+  const poi = j.name && poiCats.includes(j.category) ? j.name : '';
+  const street = [a.house_number, short(a.road || a.pedestrian || a.footway || a.residential)].filter(Boolean).join(' ');
+  const state = short(a.state);
+  const area = short(a.village || a.neighbourhood || a.quarter || a.hamlet || a.suburb);
+  const city = [a.city, a.town, a.municipality, a.state_district, a.county, a.city_district]
+    .map(short).find(c => c && c !== state && c !== area) || '';
+  const parts = [poi, street, area, city, state].filter(Boolean);
+  const seen = new Set();
+  return parts.filter(x => { const k = x.toLowerCase(); return !seen.has(k) && seen.add(k); }).join(', ');
 }
 const geo = { watch: null, best: null, lastLookup: null, timer: 0 };
 const distM = (a, b) => {
@@ -486,8 +499,19 @@ function drawWatermark(ctx, W, H, s, snap) {   // s = canvas px per on-screen CS
     ctx.fillText(note, pad + 14 * s, y - 8 * s - small * 0.12);
     y -= bh + gap;
   }
-  // Location
+  // Location (word-wrapped so long addresses never run off the photo)
   ctx.font = `400 ${small}px Oswald, sans-serif`;
+  const maxW = W - pad * 2;
+  const wrapped = [];
+  for (const line of locLines) {
+    let cur = '';
+    for (const w of line.split(' ')) {
+      const test = cur ? cur + ' ' + w : w;
+      if (cur && ctx.measureText(test).width > maxW) { wrapped.push(cur); cur = w; } else cur = test;
+    }
+    if (cur) wrapped.push(cur);
+  }
+  locLines.length = 0; locLines.push(...wrapped);
   for (let i = locLines.length - 1; i >= 0; i--) { ctx.fillText(locLines[i], pad, y - small * 0.15); y -= small * 1.3; }
   y -= gap - small * 0.3;
   // Time
