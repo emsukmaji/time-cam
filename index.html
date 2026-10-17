@@ -66,6 +66,8 @@
   .recording .rail, .recording #flipBtn, .recording .modes, .recording .thumb, .recording .team { opacity:.3; pointer-events:none; }
   [hidden] { display:none !important; }
   #prevSheet { z-index:20; }
+  #noteEdit label { margin-top:10px; }
+  #noteEdit textarea { resize:none; }
   .tlist { display:flex; flex-direction:column; gap:8px; max-height:40vh; overflow:auto; margin-bottom:6px; }
   .titem { display:flex; align-items:center; gap:8px; border:1.5px solid #e3e3e3; border-radius:12px; padding:4px 4px 4px 12px; }
   .titem.on { border-color:var(--gold); background:#fff8e6; }
@@ -215,6 +217,9 @@
     <img id="prevImg" alt="Hasil foto">
     <video id="prevVid" controls playsinline hidden></video>
     <div id="noteEdit" hidden>
+      <label for="prevLoc">Lokasi di foto ini</label>
+      <textarea id="prevLoc" rows="2" placeholder="Alamat…"></textarea>
+      <button class="link" id="prevRegeo" hidden>↻ Cari ulang alamat dari GPS saat foto diambil</button>
       <label for="prevNote">Catatan di foto ini</label>
       <div class="row" style="margin-top:4px">
         <input id="prevNote" placeholder="Tulis catatan…" style="flex:1">
@@ -609,7 +614,7 @@ function showItem(item) {
   if (item.kind === 'photo') { img.hidden = false; img.src = state.curUrl; vid.hidden = true; vid.removeAttribute('src'); }
   else { img.hidden = true; vid.hidden = false; vid.src = state.curUrl; }
   $('noteEdit').hidden = !(item.kind === 'photo' && item.raw);
-  if (item.snap) $('prevNote').value = item.snap.note;
+  if (item.snap) { $('prevNote').value = item.snap.note; $('prevLoc').value = item.snap.loc; $('prevRegeo').hidden = !item.snap.coords; }
   openSheet('prevSheet');
 }
 
@@ -632,7 +637,7 @@ async function takePhoto() {
   const raw = document.createElement('canvas'); raw.width = W; raw.height = H;
   drawFrame(raw.getContext('2d'), W, H, rot, false);
   const item = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), kind: 'photo', time: Date.now(), saved: false,
-                 raw: await toBlob(raw, 'image/jpeg', 0.95), snap: { date: Date.now(), loc: locText(), note: state.note } };
+                 raw: await toBlob(raw, 'image/jpeg', 0.95), snap: { date: Date.now(), loc: locText(), note: state.note, coords: state.coords ? { ...state.coords } : null } };
   await renderPhoto(item);
   showItem(item); setThumbBtn(item);
   db.put(item).catch(() => alert('Penyimpanan HP penuh — foto belum tersimpan di galeri app. Simpan ke Photos sekarang.'));
@@ -741,6 +746,7 @@ $('shutter').onclick = () => {
 $('applyNote').onclick = async () => {
   const item = state.current; if (!item || !item.raw) return;
   item.snap.note = $('prevNote').value.trim();
+  item.snap.loc = $('prevLoc').value.trim();          // location change applies to this photo only
   state.note = item.snap.note; store.set('note', state.note); renderWm();   // becomes the note for next shots
   await renderPhoto(item);
   item.saved = false;
@@ -749,6 +755,14 @@ $('applyNote').onclick = async () => {
   db.put(item).catch(() => {});
   if (state.galleryOpen) renderGallery();
   db.all().then(items => setThumbBtn(items[0])).catch(() => {});
+};
+$('prevRegeo').onclick = async () => {
+  const c = state.current && state.current.snap && state.current.snap.coords; if (!c) return;
+  $('prevRegeo').textContent = 'Mencari alamat…';
+  geoCache.key = '';
+  $('prevLoc').value = await reverseGeocode(c.lat, c.lon);
+  $('prevRegeo').textContent = '↻ Cari ulang alamat dari GPS saat foto diambil';
+  $('applyNote').click();
 };
 $('prevNote').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('applyNote').click(); $('prevNote').blur(); } });
 document.querySelectorAll('#prevSheet [data-close], #prevSheet').forEach(el => el.addEventListener('click', () => { const v = $('prevVid'); if (!v.hidden) v.pause(); }));
