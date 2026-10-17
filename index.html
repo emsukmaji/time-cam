@@ -66,6 +66,9 @@
   .recording .rail, .recording #flipBtn, .recording .modes, .recording .thumb, .recording .team { opacity:.3; pointer-events:none; }
   [hidden] { display:none !important; }
   #prevSheet { z-index:20; }
+  .seg { display:flex; background:#f0f0f0; border-radius:10px; padding:3px; margin-top:12px; }
+  .seg button { flex:1; border:0; background:none; border-radius:8px; padding:8px 4px; font:600 13px Poppins; color:#777; }
+  .seg button.on { background:#fff; color:#111; box-shadow:0 1px 3px rgba(0,0,0,.12); }
   #noteEdit label { margin-top:10px; }
   #noteEdit textarea { resize:none; }
   .tlist { display:flex; flex-direction:column; gap:8px; max-height:40vh; overflow:auto; margin-bottom:6px; }
@@ -226,6 +229,7 @@
         <button class="btn" id="applyNote" style="flex:none;padding:10px 16px">Ubah</button>
       </div>
     </div>
+    <div class="seg" data-wm><button data-v="1">Dengan watermark</button><button data-v="0">Tanpa watermark</button></div>
     <div class="row"><button class="btn alt" id="prevDel" style="flex:none;padding:13px 16px" aria-label="Hapus">🗑</button><button class="btn alt" data-close>Tutup</button><button class="btn gold" id="saveBtn">Simpan ke Foto</button></div>
     <div class="hint">Di iPhone: tekan "Simpan ke Foto" → pilih <b>Save Image</b> / <b>Save Video</b>. Atau tekan-tahan gambar → Save to Photos.</div>
   </div>
@@ -251,6 +255,7 @@
     <div class="hint" id="galEmpty" hidden>Belum ada foto atau video.</div>
     <div class="hint" id="galMode" hidden style="color:#b8860b">Kamu membuka lewat tab Safari. Galeri di Safari terpisah dari galeri di app home screen — buka dari ikon home screen untuk melihat foto yang diambil di sana.</div>
     <div class="ggrid" id="galGrid"></div>
+    <div class="seg" data-wm><button data-v="1">Dengan watermark</button><button data-v="0">Tanpa watermark</button></div>
     <div class="row"><button class="btn alt" data-close>Tutup</button><button class="btn alt" id="galDel" hidden>Hapus</button><button class="btn gold" id="galSave">Simpan</button></div>
     <div class="hint">Foto &amp; video tersimpan di app sampai kamu hapus. "Simpan ke Foto" membuka share sheet → pilih <b>Save Images</b> untuk menyimpan semuanya sekaligus. ✓ = sudah disimpan.</div>
   </div>
@@ -638,6 +643,10 @@ function showItem(item) {
   if (item.kind === 'photo') { img.hidden = false; img.src = state.curUrl; vid.hidden = true; vid.removeAttribute('src'); }
   else { img.hidden = true; vid.hidden = false; vid.src = state.curUrl; }
   $('noteEdit').hidden = !(item.kind === 'photo' && item.raw);
+  if (state.rawUrl) URL.revokeObjectURL(state.rawUrl);
+  state.rawUrl = item.raw ? URL.createObjectURL(item.raw) : null;
+  document.querySelector('#prevSheet [data-wm]').hidden = !(item.kind === 'photo' && item.raw);
+  renderSeg();
   if (item.snap) { $('prevNote').value = item.snap.note; $('prevLoc').value = item.snap.loc; $('prevRegeo').hidden = !item.snap.coords; }
   openSheet('prevSheet');
 }
@@ -776,6 +785,8 @@ $('applyNote').onclick = async () => {
   item.saved = false;
   if (state.curUrl) URL.revokeObjectURL(state.curUrl);
   state.curUrl = URL.createObjectURL(item.blob); $('prevImg').src = state.curUrl;
+  if (!state.saveWm) { state.saveWm = true; store.set('saveWm', true); }   // show the edit result
+  renderSeg();
   db.put(item).catch(() => {});
   if (state.galleryOpen) renderGallery();
   db.all().then(items => setThumbBtn(items[0])).catch(() => {});
@@ -798,8 +809,22 @@ function fileFor(item) {
   const type = isVid ? (item.blob.type.split(';')[0] || 'video/mp4') : 'image/jpeg';
   const ext = isVid ? (type.includes('webm') ? 'webm' : 'mp4') : 'jpg';
   const name = `TimeCam_${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}_${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}.${ext}`;
-  return new File([item.blob], name, { type });
+  // photos can be saved without the watermark (clean original); videos always carry it
+  const clean = !state.saveWm && !isVid && item.raw;
+  return new File([clean ? item.raw : item.blob], clean ? name.replace('.jpg', '_clean.jpg') : name, { type });
 }
+/* Save with / without watermark (remembered) */
+state.saveWm = store.get('saveWm', true);
+function renderSeg() {
+  document.querySelectorAll('[data-wm] button').forEach(b => b.classList.toggle('on', (b.dataset.v === '1') === state.saveWm));
+  const it = state.current;
+  if (it && !$('prevImg').hidden) $('prevImg').src = state.saveWm || !it.raw ? state.curUrl : (state.rawUrl || state.curUrl);
+}
+document.querySelectorAll('[data-wm]').forEach(el => el.onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  state.saveWm = b.dataset.v === '1'; store.set('saveWm', state.saveWm); renderSeg();
+});
+renderSeg();
 async function saveItems(items) {
   if (!items.length) return false;
   const files = items.map(fileFor);
