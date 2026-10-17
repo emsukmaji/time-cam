@@ -49,7 +49,7 @@
   .panel { position:absolute; left:0; right:0; bottom:0; background:rgba(55,55,55,.72); padding:10px 0 12px; }
   .team { display:block; margin:0 auto; border:0; background:none; color:#fff; font:600 16px Poppins; padding:4px 10px; }
   .team b { font-weight:400; margin-left:8px; }
-  .controls { display:flex; align-items:center; justify-content:space-around; padding:14px 8px 0; }
+  .controls { display:flex; align-items:center; justify-content:space-around; padding:6px 8px 0; }
   .thumb { width:96px; text-align:center; color:#fff; font:600 13px Poppins; border:0; background:none; padding:0; }
   .thumb .box { width:38px; height:38px; margin:0 auto 6px; border-radius:6px; background:rgba(255,255,255,.12) center/cover; border:2px solid #fff; }
   .shutter { -webkit-appearance:none; appearance:none; width:76px; height:76px; padding:0; margin:0; border-radius:50%; border:5px solid #fff; background:transparent; flex:none; display:grid; place-items:center; overflow:hidden; box-sizing:border-box; }
@@ -63,7 +63,7 @@
   .recording .shutter .dot { border-radius:10px; transform:scale(.45); }
   .rec { position:absolute; top:12px; left:50%; transform:translateX(-50%); background:#ff3b30; color:#fff; font:600 15px Poppins; padding:4px 12px; border-radius:6px; display:none; font-variant-numeric:tabular-nums; }
   .recording .rec { display:block; }
-  .recording .rail, .recording #flipBtn, .recording .modes, .recording .thumb, .recording .team { opacity:.3; pointer-events:none; }
+  .recording .rail, .recording #flipBtn, .recording .modes, .recording .thumb  { opacity:.3; pointer-events:none; }
   [hidden] { display:none !important; }
   #prevSheet { z-index:20; }
   .seg { display:flex; background:#f0f0f0; border-radius:10px; padding:3px; margin-top:12px; }
@@ -103,7 +103,7 @@
   .count.pop { animation:pop .9s ease-out; }
   @keyframes pop { from { transform:scale(1.4); opacity:.2; } 30% { transform:scale(1); opacity:1; } to { opacity:.85; } }
   .counting .shutter .dot { background:rgba(255,255,255,.35); border-radius:8px; transform:scale(.42); }
-  .counting .rail, .counting .modes, .counting .thumb, .counting .team, .counting #flipBtn, .counting #timerBtn { opacity:.3; pointer-events:none; }
+  .counting .rail, .counting .modes, .counting .thumb , .counting #flipBtn, .counting #timerBtn { opacity:.3; pointer-events:none; }
 
   /* Landscape: watermark rotated into the corner, like Timemark */
   .land { position:absolute; pointer-events:none; z-index:4; display:none; }
@@ -179,11 +179,10 @@
     </div>
 
     <div class="panel" id="panel">
-      <button class="team" id="teamBtn">Edit Watermark<b>→</b></button>
       <div class="controls">
         <button class="thumb" id="thumbBtn"><div class="box" id="thumbBox"></div>Preview</button>
         <button class="shutter" id="shutter" aria-label="Ambil foto"><span class="dot"></span></button>
-        <button class="thumb tpl" id="tplBtn"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 10h8M8 14h6M8 17.5h3"/></svg>Templates</button>
+        <button class="thumb tpl" id="tplBtn"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 10h8M8 14h6M8 17.5h3"/></svg>Watermark</button>
       </div>
       <div class="wm" id="wm">
         <div class="wm-row">
@@ -232,19 +231,6 @@
     <div class="seg" data-wm><button data-v="1">Dengan watermark</button><button data-v="0">Tanpa watermark</button></div>
     <div class="row"><button class="btn alt" id="prevDel" style="flex:none;padding:13px 16px" aria-label="Hapus">🗑</button><button class="btn alt" data-close>Tutup</button><button class="btn gold" id="saveBtn">Simpan ke Foto</button></div>
     <div class="hint">Di iPhone: tekan "Simpan ke Foto" → pilih <b>Save Image</b> / <b>Save Video</b>. Atau tekan-tahan gambar → Save to Photos.</div>
-  </div>
-</div>
-
-<!-- Templates sheet -->
-<div class="sheet" id="tplSheet">
-  <div class="card">
-    <h3>Templates</h3>
-    <div class="tlist" id="tplList"></div>
-    <div class="hint" id="tplEmpty" style="text-align:left">Belum ada template. Tambahkan catatan &amp; lokasi yang sering dipakai di bawah.</div>
-    <label id="tplFormLbl">Template baru</label>
-    <input id="tplNote" placeholder="Catatan, mis. Cek gudang B">
-    <input id="tplLoc" placeholder="Lokasi (opsional, kosong = GPS otomatis)" style="margin-top:8px">
-    <div class="row"><button class="btn alt" data-close>Tutup</button><button class="btn" id="tplAdd">Tambah</button></div>
   </div>
 </div>
 
@@ -473,7 +459,7 @@ function openSheet(id) { $(id).classList.add('open'); }
 document.querySelectorAll('.sheet').forEach(s => s.addEventListener('click', e => {
   if (e.target === s || e.target.hasAttribute('data-close')) s.classList.remove('open');
 }));
-$('editBtn').onclick = $('menuBtn').onclick = $('teamBtn').onclick = () => {
+$('editBtn').onclick = $('menuBtn').onclick = $('tplBtn').onclick = () => {
   $('inLoc').value = state.manualLoc; $('inNote').value = state.note; $('inCoord').checked = state.showCoord;
   openSheet('editSheet');
 };
@@ -925,51 +911,6 @@ function fitHeight() {
 fitHeight(); addEventListener('resize', fitHeight);
 // keep the right rail just above the bottom panel
 try { new ResizeObserver(() => document.documentElement.style.setProperty('--panel-h', $('panel').offsetHeight + 'px')).observe($('panel')); } catch {} addEventListener('orientationchange', () => setTimeout(fitHeight, 300));
-
-/* ---------- Templates: saved notes (+ optional fixed location), one tap to use ---------- */
-const tpl = { list: store.get('templates', []), editing: -1 };
-function saveTpls() { store.set('templates', tpl.list); }
-function renderTpls() {
-  const box = $('tplList'); box.innerHTML = '';
-  $('tplEmpty').hidden = tpl.list.length > 0;
-  tpl.list.forEach((it, i) => {
-    const row = document.createElement('div');
-    row.className = 'titem' + (it.note === state.note && (it.loc || '') === (state.manualLoc || '') ? ' on' : '');
-    const main = document.createElement('button'); main.className = 'tmain';
-    const b = document.createElement('b'); b.textContent = it.note || '(tanpa catatan)';
-    const s = document.createElement('small'); s.textContent = '📍 ' + (it.loc || 'GPS otomatis');
-    main.append(b, s);
-    main.onclick = () => {                                   // use this template
-      state.note = it.note; state.manualLoc = it.loc || '';
-      store.set('note', state.note); store.set('manualLoc', state.manualLoc);
-      renderWm(); $('tplSheet').classList.remove('open');
-    };
-    const ed = document.createElement('button'); ed.className = 'tic'; ed.textContent = '✎'; ed.setAttribute('aria-label', 'Edit');
-    ed.onclick = () => { tpl.editing = i; $('tplNote').value = it.note; $('tplLoc').value = it.loc || ''; setTplForm(); $('tplNote').focus(); };
-    const del = document.createElement('button'); del.className = 'tic'; del.textContent = '✕'; del.setAttribute('aria-label', 'Hapus');
-    del.onclick = () => { if (!confirm(`Hapus template "${it.note}"?`)) return; tpl.list.splice(i, 1); saveTpls(); tpl.editing = -1; setTplForm(); renderTpls(); };
-    row.append(main, ed, del); box.appendChild(row);
-  });
-}
-function setTplForm() {
-  const e = tpl.editing >= 0;
-  $('tplFormLbl').textContent = e ? 'Edit template' : 'Template baru';
-  $('tplAdd').textContent = e ? 'Simpan' : 'Tambah';
-}
-$('tplBtn').onclick = () => {
-  tpl.editing = -1; setTplForm();
-  $('tplNote').value = ''; $('tplLoc').value = '';
-  renderTpls(); openSheet('tplSheet');
-};
-$('tplAdd').onclick = () => {
-  const note = $('tplNote').value.trim(), loc = $('tplLoc').value.trim();
-  if (!note && !loc) { $('tplNote').focus(); return; }
-  if (tpl.editing >= 0) tpl.list[tpl.editing] = { note, loc };
-  else tpl.list.unshift({ note, loc });
-  saveTpls(); tpl.editing = -1; setTplForm();
-  $('tplNote').value = ''; $('tplLoc').value = '';
-  renderTpls();
-};
 
 /* ---------- Phone orientation (UI stays portrait; watermark & photo follow the phone) ---------- */
 state.rot = 0;
