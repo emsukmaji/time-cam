@@ -249,6 +249,7 @@
   <div class="card gal">
     <div class="galhead"><h3 id="galTitle">Galeri</h3><button class="link" id="galAll" hidden>Pilih semua</button><button class="link" id="galSelect">Pilih</button></div>
     <div class="hint" id="galEmpty" hidden>Belum ada foto atau video.</div>
+    <div class="hint" id="galMode" hidden style="color:#b8860b">Kamu membuka lewat tab Safari. Galeri di Safari terpisah dari galeri di app home screen — buka dari ikon home screen untuk melihat foto yang diambil di sana.</div>
     <div class="ggrid" id="galGrid"></div>
     <div class="row"><button class="btn alt" data-close>Tutup</button><button class="btn alt" id="galDel" hidden>Hapus</button><button class="btn gold" id="galSave">Simpan</button></div>
     <div class="hint">Foto &amp; video tersimpan di app sampai kamu hapus. "Simpan ke Foto" membuka share sheet → pilih <b>Save Images</b> untuk menyimpan semuanya sekaligus. ✓ = sudah disimpan.</div>
@@ -583,14 +584,37 @@ const db = {
       const out = fn(s); t.oncomplete = () => res(out && out.result !== undefined ? out.result : out); t.onerror = () => rej(t.error);
     });
   },
-  put(item) { return this.tx('readwrite', s => s.put(item)); },
+  // Safari can lose Blob objects stored in IndexedDB after a reload, so files are stored as raw bytes
+  async put(item) {
+    const rec = { ...item };
+    for (const k of ['blob', 'raw']) {
+      if (item[k] instanceof Blob) rec[k] = { bytes: await item[k].arrayBuffer(), type: item[k].type };
+    }
+    return this.tx('readwrite', s => s.put(rec));
+  },
   del(id) { return this.tx('readwrite', s => s.delete(id)); },
+  // read one record at a time so a single damaged record can't hide the whole gallery
   async all() {
     const d = await this.open();
-    return new Promise((res, rej) => {
-      const r = d.transaction('items').objectStore('items').getAll();
-      r.onsuccess = () => res(r.result.sort((a, b) => b.time - a.time)); r.onerror = () => rej(r.error);
+    const out = [];
+    await new Promise(res => {
+      let req;
+      try { req = d.transaction('items').objectStore('items').openCursor(); } catch { return res(); }
+      req.onsuccess = () => {
+        const cur = req.result; if (!cur) return res();
+        try {
+          const it = { ...cur.value };
+          for (const k of ['blob', 'raw']) {
+            const v = it[k];
+            if (v && v.bytes) it[k] = new Blob([v.bytes], { type: v.type });
+          }
+          if (it.blob) out.push(it);
+        } catch {}
+        try { cur.continue(); } catch { res(); }
+      };
+      req.onerror = e => { e.preventDefault(); res(); };
     });
+    return out.sort((a, b) => b.time - a.time);
   }
 };
 try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch {}
@@ -801,6 +825,7 @@ async function renderGallery() {
   grid.innerHTML = '';
   $('galTitle').textContent = `Galeri (${gal.items.length})`;
   $('galEmpty').hidden = gal.items.length > 0;
+  $('galMode').hidden = !!(navigator.standalone || matchMedia('(display-mode: standalone)').matches);
   for (const it of gal.items) {
     const b = document.createElement('button');
     b.className = 'gitem' + (gal.picked.has(it.id) ? ' picked' : '');
