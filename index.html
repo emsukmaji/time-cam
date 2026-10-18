@@ -120,7 +120,8 @@
   .wm-bar { width:3px; background:var(--gold); border-radius:2px; }
   .wm-dd { display:flex; flex-direction:column; justify-content:space-between; font:400 15px Oswald,sans-serif; padding:2px 0; }
   .wm-loc { margin-top:8px; font:400 15px Oswald,sans-serif; }
-  .wm-note { margin-top:8px; display:inline-block; box-sizing:border-box; min-width:144px; background:rgba(255,255,255,.24); border-radius:7px; padding:8px 12px; font:400 15px/18px Oswald,sans-serif; }
+  .wm-note { margin-top:8px; display:inline-flex; align-items:center; height:36px; line-height:1; padding:0 26px 0 8px; border-radius:5px; font:400 15px Oswald,sans-serif;
+    background:linear-gradient(90deg, rgba(255,255,255,.2) 0%, rgba(255,255,255,.18) 80%, rgba(255,255,255,0) 100%); }
   .wm-note:empty { display:none; }
 
   /* Bottom mode bar */
@@ -486,15 +487,19 @@ function drawWatermark(ctx, W, H, s, snap) {   // s = canvas px per on-screen CS
   const timeSize = 64 * s, small = 18 * s, gap = 10 * s;
   let y = H - pad;
 
-  // Note box — light translucent pill, wider than the text (like Timemark)
+  // Note box — like Timemark: soft light band that fades out to the right
   if (note) {
     ctx.font = `400 ${small}px Oswald, sans-serif`;
-    const tw = ctx.measureText(note).width, bh = small + 24 * s;
-    const bw = Math.min(W - pad * 2, Math.max(tw + 30 * s, 175 * s));
-    ctx.save(); ctx.shadowColor = 'transparent';
-    ctx.fillStyle = 'rgba(255,255,255,.24)';
-    roundRect(ctx, pad, y - bh, bw, bh, 8 * s); ctx.fill(); ctx.restore();
-    ctx.fillText(note, pad + 14 * s, y - (bh - small * 0.72) / 2);
+    const tw = ctx.measureText(note).width;
+    const bh = small * 2.4, padL = small * 0.55;
+    const bw = Math.min(W - pad, tw + padL + small * 1.6);
+    const g = ctx.createLinearGradient(pad, 0, pad + bw, 0);
+    g.addColorStop(0, 'rgba(255,255,255,.2)');
+    g.addColorStop(0.8, 'rgba(255,255,255,.18)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.save(); ctx.shadowColor = 'transparent'; ctx.fillStyle = g;
+    roundRect(ctx, pad, y - bh, bw, bh, small * 0.3); ctx.fill(); ctx.restore();
+    ctx.fillText(note, pad + padL, y - (bh - small * 0.72) / 2);
     y -= bh + gap;
   }
   // Location (word-wrapped so long addresses never run off the photo)
