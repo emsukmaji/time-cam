@@ -83,6 +83,7 @@
   .seg button.on { background:#fff; color:#111; box-shadow:0 1px 3px rgba(0,0,0,.12); }
   #noteEdit label { margin-top:10px; }
   #noteEdit textarea { resize:none; }
+  #prevRegeo { display:block; font-size:13px; padding:6px 0 0; text-align:left; }
   .tlist { display:flex; flex-direction:column; gap:8px; max-height:40vh; overflow:auto; margin-bottom:6px; }
   .titem { display:flex; align-items:center; gap:8px; border:1.5px solid #e3e3e3; border-radius:12px; padding:4px 4px 4px 12px; }
   .titem.on { border-color:var(--gold); background:#fff8e6; }
@@ -241,10 +242,8 @@
       <textarea id="prevLoc" rows="2" placeholder="Alamat…"></textarea>
       <button class="link" id="prevRegeo" hidden>↻ Cari ulang alamat dari GPS saat foto diambil</button>
       <label for="prevNote">Catatan di foto ini</label>
-      <div class="row" style="margin-top:4px">
-        <input id="prevNote" placeholder="Tulis catatan…" style="flex:1">
-        <button class="btn" id="applyNote" style="flex:none;padding:10px 16px">Ubah</button>
-      </div>
+      <input id="prevNote" placeholder="Tulis catatan…">
+      <button class="btn" id="applyNote" style="width:100%;margin-top:10px">Ubah lokasi &amp; catatan</button>
     </div>
     <div class="seg" data-wm><button data-v="1">Dengan watermark</button><button data-v="0">Tanpa watermark</button></div>
     <div class="row"><button class="btn alt" id="prevDel" style="flex:none;padding:13px 16px" aria-label="Hapus">🗑</button><button class="btn alt" data-close>Tutup</button><button class="btn gold" id="saveBtn">Simpan ke Foto</button></div>
