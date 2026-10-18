@@ -25,6 +25,17 @@
   .icon-btn svg { width:28px; height:28px; stroke:#111; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   .top { position:relative; }
   .top .spacer { flex:1; }
+  /* Aspect ratio button + picker */
+  .ratio-ic { display:grid; place-items:center; border:2.2px solid #111; border-radius:5px; font:700 9px/1 Poppins; color:#111; min-width:22px; height:26px; padding:0 2px; letter-spacing:-.2px; }
+  .ratio-pick { position:absolute; left:0; right:0; top:var(--top-h, 56px); z-index:15; background:#fff; display:none; justify-content:space-around; align-items:center; padding:12px 8px 14px; box-shadow:0 6px 12px rgba(0,0,0,.12); }
+  .ratio-pick.open { display:flex; }
+  .ratio-pick button { border:0; background:none; padding:6px 10px; }
+  .ratio-pick .ratio-ic { font-size:13px; border-width:3px; border-radius:7px; }
+  .ratio-pick .r34 { width:36px; height:46px; }
+  .ratio-pick .r916 { width:30px; height:52px; }
+  .ratio-pick .r11 { width:42px; height:42px; }
+  .ratio-pick .rfull { width:28px; height:54px; font-size:11px; }
+  .ratio-pick button.on .ratio-ic { border-color:#3b8bea; color:#3b8bea; }
   .app-title { position:absolute; left:50%; transform:translateX(-50%); bottom:10px; background:#1c1c1c; color:#F5E663; font:700 17px/1 Poppins; letter-spacing:.3px; padding:8px 16px; border-radius:999px; pointer-events:none; white-space:nowrap; }
   .pill { border:1.5px solid #111; border-radius:999px; padding:4px 11px 4px 8px; font:700 15px/1.2 Poppins; display:flex; gap:5px; align-items:center; background:#fff; color:#111; white-space:nowrap; }
   .pill svg { width:18px; height:18px; stroke:#111; fill:none; stroke-width:2; }
@@ -33,7 +44,7 @@
 
   /* Viewfinder */
   .stage { position:relative; flex:1; min-height:0; background:#000; overflow:hidden; }
-  video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform-origin:center; }
+  video { position:absolute; top:0; left:0; width:100%; height:var(--frame-h, 100%); object-fit:cover; transform-origin:center; }
   video.mirror { transform:scaleX(-1); }
   .msg { position:absolute; inset:0 0 40% 0; display:grid; place-items:center; color:#fff; text-align:center; padding:24px; font-size:15px; }
   .msg button { margin-top:12px; background:var(--gold); color:#111; border:0; border-radius:999px; padding:10px 20px; font:600 15px Poppins; }
@@ -65,7 +76,7 @@
   .recording .shutter .dot { border-radius:10px; transform:scale(.45); }
   .rec { position:absolute; top:12px; left:50%; transform:translateX(-50%); background:#ff3b30; color:#fff; font:600 15px Poppins; padding:4px 12px; border-radius:6px; display:none; font-variant-numeric:tabular-nums; }
   .recording .rec { display:block; }
-  .recording .rail, .recording #flipBtn, .recording .modes, .recording .thumb  { opacity:.3; pointer-events:none; }
+  .recording .rail, .recording #flipBtn, .recording #ratioBtn, .recording .modes, .recording .thumb  { opacity:.3; pointer-events:none; }
   [hidden] { display:none !important; }
   #prevSheet { z-index:20; }
   .seg { display:flex; background:#f0f0f0; border-radius:10px; padding:3px; margin-top:12px; }
@@ -105,7 +116,7 @@
   .count.pop { animation:pop .9s ease-out; }
   @keyframes pop { from { transform:scale(1.4); opacity:.2; } 30% { transform:scale(1); opacity:1; } to { opacity:.85; } }
   .counting .shutter .dot { background:rgba(255,255,255,.35); border-radius:8px; transform:scale(.42); }
-  .counting .rail, .counting .modes, .counting .thumb , .counting #flipBtn, .counting #timerBtn { opacity:.3; pointer-events:none; }
+  .counting .rail, .counting .modes, .counting .thumb , .counting #flipBtn, .counting #ratioBtn, .counting #timerBtn { opacity:.3; pointer-events:none; }
 
   /* Landscape: watermark rotated into the corner, like Timemark */
   .land { position:absolute; pointer-events:none; z-index:4; display:none; }
@@ -158,9 +169,16 @@
     <button class="icon-btn timer-btn" id="timerBtn" aria-label="Timer"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2.5h5M19 6l1.5-1.5"/></svg><span id="timerLbl"></span></button>
     <div class="spacer"></div>
     <div class="app-title">TimeCam</div>
+    <button class="icon-btn" id="ratioBtn" aria-label="Rasio foto"><span class="ratio-ic" id="ratioLbl">9:16</span></button>
     <button class="icon-btn" id="flipBtn" aria-label="Ganti kamera"><svg viewBox="0 0 24 24"><path d="M20 15V8a3 3 0 0 0-3-3h-1.5"/><path d="M4 9v7a3 3 0 0 0 3 3h1.5"/><path d="M17.5 3 15.5 5l2 2"/><path d="M6.5 21l2-2-2-2"/><circle cx="12" cy="12" r="3"/></svg></button>
   </div>
 
+  <div class="ratio-pick" id="ratioPick">
+    <button data-r="3:4"><span class="ratio-ic r34">3:4</span></button>
+    <button data-r="9:16"><span class="ratio-ic r916">9:16</span></button>
+    <button data-r="1:1"><span class="ratio-ic r11">1:1</span></button>
+    <button data-r="full"><span class="ratio-ic rfull">Full</span></button>
+  </div>
   <div class="stage" id="stage">
     <video id="video" playsinline muted autoplay></video>
     <div class="msg" id="msg"><div>Mengaktifkan kamera…</div></div>
@@ -542,7 +560,7 @@ function roundRect(ctx, x, y, w, h, r) {
 /* ---------- Capture (photo & video) ---------- */
 // 9:16 portrait crop of the camera frame, with digital zoom
 function frameRect() {
-  const vw = video.videoWidth, vh = video.videoHeight, R = 9 / 16;
+  const vw = video.videoWidth, vh = video.videoHeight, R = ratioValue();
   let cw = vw, ch = vh;
   if (vw / vh > R) cw = vh * R; else ch = vw / R;
   const sw = cw / state.zoom, sh = ch / state.zoom;
@@ -898,6 +916,34 @@ $('prevDel').onclick = async () => {
   const items = await db.all().catch(() => []); setThumbBtn(items[0]);
   if (state.galleryOpen) renderGallery();
 };
+
+/* ---------- Aspect ratio (default 9:16) ----------
+   The camera preview is sized to exactly the chosen ratio (top-aligned), so what you see is what is saved. */
+state.ratio = store.get('ratio', '9:16');
+function ratioValue() {
+  if (state.ratio === '3:4') return 3 / 4;
+  if (state.ratio === '1:1') return 1;
+  if (state.ratio === 'full') { const s = $('stage'); return s.clientWidth / s.clientHeight; }
+  return 9 / 16;
+}
+function layoutFrame() {
+  const s = $('stage'), w = s.clientWidth, h = s.clientHeight; if (!w || !h) return;
+  const fh = Math.min(h, w / ratioValue());
+  document.documentElement.style.setProperty('--frame-h', fh + 'px');
+  document.documentElement.style.setProperty('--top-h', document.querySelector('.top').offsetHeight + 'px');
+  $('ratioLbl').textContent = state.ratio === 'full' ? 'Full' : state.ratio;
+  document.querySelectorAll('#ratioPick button').forEach(b => b.classList.toggle('on', b.dataset.r === state.ratio));
+}
+$('ratioBtn').onclick = e => { e.stopPropagation(); if (document.body.classList.contains('recording')) return; $('ratioPick').classList.toggle('open'); };
+$('ratioPick').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  state.ratio = b.dataset.r; store.set('ratio', state.ratio);
+  layoutFrame(); $('ratioPick').classList.remove('open');
+};
+document.addEventListener('click', e => { if (!e.target.closest('#ratioPick, #ratioBtn')) $('ratioPick').classList.remove('open'); });
+addEventListener('resize', layoutFrame);
+try { new ResizeObserver(layoutFrame).observe($('stage')); } catch {}
+layoutFrame();
 
 /* ---------- Full-screen height ----------
    iOS home-screen apps often report a viewport shorter than the screen, leaving a blank strip at the bottom.
