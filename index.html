@@ -23,7 +23,9 @@
   .top { flex:none; padding:env(safe-area-inset-top) 10px 6px; display:flex; align-items:center; gap:6px; background:#fff; }
   .icon-btn { width:42px; height:42px; border:0; background:none; display:grid; place-items:center; padding:0; flex:none; }
   .icon-btn svg { width:28px; height:28px; stroke:#111; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .top { position:relative; }
   .top .spacer { flex:1; }
+  .app-title { position:absolute; left:50%; transform:translateX(-50%); bottom:14px; font:700 18px/1 Poppins; color:#111; letter-spacing:.3px; pointer-events:none; }
   .pill { border:1.5px solid #111; border-radius:999px; padding:4px 11px 4px 8px; font:700 15px/1.2 Poppins; display:flex; gap:5px; align-items:center; background:#fff; color:#111; white-space:nowrap; }
   .pill svg { width:18px; height:18px; stroke:#111; fill:none; stroke-width:2; }
   .plus { border:0; border-radius:999px; padding:6px 13px; background:#1c1c1c; color:#fff; font:700 15px/1.2 Poppins; display:flex; gap:4px; align-items:center; white-space:nowrap; }
@@ -152,10 +154,10 @@
 <body>
 <div class="app">
   <div class="top">
-    <button class="icon-btn" id="menuBtn" aria-label="Pengaturan"><svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h14M3 18h10"/></svg></button>
     <button class="icon-btn" id="torchBtn" aria-label="Flash"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/><path d="M3 3l18 18" id="torchSlash"/></svg></button>
     <button class="icon-btn timer-btn" id="timerBtn" aria-label="Timer"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2.5h5M19 6l1.5-1.5"/></svg><span id="timerLbl"></span></button>
     <div class="spacer"></div>
+    <div class="app-title">TimeCam</div>
     <button class="icon-btn" id="flipBtn" aria-label="Ganti kamera"><svg viewBox="0 0 24 24"><path d="M20 15V8a3 3 0 0 0-3-3h-1.5"/><path d="M4 9v7a3 3 0 0 0 3 3h1.5"/><path d="M17.5 3 15.5 5l2 2"/><path d="M6.5 21l2-2-2-2"/><circle cx="12" cy="12" r="3"/></svg></button>
   </div>
 
@@ -460,7 +462,7 @@ function openSheet(id) { $(id).classList.add('open'); }
 document.querySelectorAll('.sheet').forEach(s => s.addEventListener('click', e => {
   if (e.target === s || e.target.hasAttribute('data-close')) s.classList.remove('open');
 }));
-$('editBtn').onclick = $('menuBtn').onclick = $('tplBtn').onclick = () => {
+$('editBtn').onclick = $('tplBtn').onclick = () => {
   $('inLoc').value = state.manualLoc; $('inNote').value = state.note; $('inCoord').checked = state.showCoord;
   openSheet('editSheet');
 };
