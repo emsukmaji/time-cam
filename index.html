@@ -120,7 +120,7 @@
   .wm-bar { width:3px; background:var(--gold); border-radius:2px; }
   .wm-dd { display:flex; flex-direction:column; justify-content:space-between; font:400 15px Oswald,sans-serif; padding:2px 0; }
   .wm-loc { margin-top:8px; font:400 15px Oswald,sans-serif; }
-  .wm-note { margin-top:8px; display:inline-block; background:rgba(255,255,255,.12); border-radius:5px; padding:6px 11px; font:400 15px Oswald,sans-serif; }
+  .wm-note { margin-top:8px; display:inline-block; box-sizing:border-box; min-width:144px; background:rgba(255,255,255,.24); border-radius:7px; padding:8px 12px; font:400 15px/18px Oswald,sans-serif; }
   .wm-note:empty { display:none; }
 
   /* Bottom mode bar */
@@ -486,14 +486,15 @@ function drawWatermark(ctx, W, H, s, snap) {   // s = canvas px per on-screen CS
   const timeSize = 64 * s, small = 18 * s, gap = 10 * s;
   let y = H - pad;
 
-  // Note box
+  // Note box — light translucent pill, wider than the text (like Timemark)
   if (note) {
     ctx.font = `400 ${small}px Oswald, sans-serif`;
-    const tw = ctx.measureText(note).width, bh = small + 16 * s;
+    const tw = ctx.measureText(note).width, bh = small + 24 * s;
+    const bw = Math.min(W - pad * 2, Math.max(tw + 30 * s, 175 * s));
     ctx.save(); ctx.shadowColor = 'transparent';
-    ctx.fillStyle = 'rgba(0,0,0,.18)';
-    roundRect(ctx, pad, y - bh, tw + 28 * s, bh, 6 * s); ctx.fill(); ctx.restore();
-    ctx.fillText(note, pad + 14 * s, y - 8 * s - small * 0.12);
+    ctx.fillStyle = 'rgba(255,255,255,.24)';
+    roundRect(ctx, pad, y - bh, bw, bh, 8 * s); ctx.fill(); ctx.restore();
+    ctx.fillText(note, pad + 14 * s, y - (bh - small * 0.72) / 2);
     y -= bh + gap;
   }
   // Location (word-wrapped so long addresses never run off the photo)
