@@ -1,7 +1,7 @@
 {
   "name": "TimeCam",
   "short_name": "TimeCam",
-  "description": "Kamera dengan watermark waktu & lokasi",
+  "description": "Camera with time & location watermark",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

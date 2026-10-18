@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
@@ -169,8 +169,8 @@
     <button class="icon-btn timer-btn" id="timerBtn" aria-label="Timer"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2.5h5M19 6l1.5-1.5"/></svg><span id="timerLbl"></span></button>
     <div class="spacer"></div>
     <div class="app-title">TimeCam</div>
-    <button class="icon-btn" id="ratioBtn" aria-label="Rasio foto"><span class="ratio-ic" id="ratioLbl">9:16</span></button>
-    <button class="icon-btn" id="flipBtn" aria-label="Ganti kamera"><svg viewBox="0 0 24 24"><path d="M20 15V8a3 3 0 0 0-3-3h-1.5"/><path d="M4 9v7a3 3 0 0 0 3 3h1.5"/><path d="M17.5 3 15.5 5l2 2"/><path d="M6.5 21l2-2-2-2"/><circle cx="12" cy="12" r="3"/></svg></button>
+    <button class="icon-btn" id="ratioBtn" aria-label="Aspect ratio"><span class="ratio-ic" id="ratioLbl">9:16</span></button>
+    <button class="icon-btn" id="flipBtn" aria-label="Switch camera"><svg viewBox="0 0 24 24"><path d="M20 15V8a3 3 0 0 0-3-3h-1.5"/><path d="M4 9v7a3 3 0 0 0 3 3h1.5"/><path d="M17.5 3 15.5 5l2 2"/><path d="M6.5 21l2-2-2-2"/><circle cx="12" cy="12" r="3"/></svg></button>
   </div>
 
   <div class="ratio-pick" id="ratioPick">
@@ -180,7 +180,7 @@
   </div>
   <div class="stage" id="stage">
     <video id="video" playsinline muted autoplay></video>
-    <div class="msg" id="msg"><div>Mengaktifkan kamera…</div></div>
+    <div class="msg" id="msg"><div>Starting camera…</div></div>
     <div class="flash" id="flash"></div>
     <div class="rec" id="recTime">00:00</div>
     <div class="count" id="count"></div>
@@ -193,14 +193,14 @@
         <button data-z="0.5">0.5</button>
       </div>
       <div class="side">
-        <button id="locBtn" aria-label="Refresh lokasi"><svg viewBox="0 0 24 24"><path d="M12 22s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="10" r="3"/></svg></button>
+        <button id="locBtn" aria-label="Refresh location"><svg viewBox="0 0 24 24"><path d="M12 22s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="10" r="3"/></svg></button>
       </div>
     </div>
 
     <div class="panel" id="panel">
       <div class="controls">
         <button class="thumb" id="thumbBtn"><div class="box" id="thumbBox"></div>Preview</button>
-        <button class="shutter" id="shutter" aria-label="Ambil foto"><span class="dot"></span></button>
+        <button class="shutter" id="shutter" aria-label="Take photo"><span class="dot"></span></button>
         <button class="thumb tpl" id="tplBtn"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 10h8M8 14h6M8 17.5h3"/></svg>Watermark</button>
       </div>
       <div class="wm" id="wm">
@@ -209,7 +209,7 @@
           <div class="wm-bar"></div>
           <div class="wm-dd"><span id="wDate"></span><span id="wDay"></span></div>
         </div>
-        <div class="wm-loc" id="wLoc">Mencari lokasi…</div>
+        <div class="wm-loc" id="wLoc">Finding location…</div>
         <div><span class="wm-note" id="wNote"></span></div>
       </div>
     </div>
@@ -222,45 +222,45 @@
 <div class="sheet" id="editSheet">
   <div class="card">
     <h3>Edit Watermark</h3>
-    <label>Lokasi (kosongkan untuk otomatis dari GPS)</label>
+    <label>Location (leave empty to use GPS automatically)</label>
     <div class="hint" id="accLbl" style="text-align:left;margin:0 0 6px"></div>
-    <input id="inLoc" placeholder="Jalan …, Kota, Provinsi">
-    <label>Catatan</label>
+    <input id="inLoc" placeholder="Street, City, Province">
+    <label>Note</label>
     <textarea id="inNote" rows="2" placeholder="I've been here :)"></textarea>
-    <div class="toggle"><span>Tampilkan koordinat</span><input type="checkbox" id="inCoord" style="width:auto"></div>
-    <div class="row"><button class="btn alt" data-close>Batal</button><button class="btn" id="saveEdit">Simpan</button></div>
+    <div class="toggle"><span>Show coordinates</span><input type="checkbox" id="inCoord" style="width:auto"></div>
+    <div class="row"><button class="btn alt" data-close>Cancel</button><button class="btn" id="saveEdit">Save</button></div>
   </div>
 </div>
 
 <!-- Preview sheet -->
 <div class="sheet" id="prevSheet">
   <div class="card preview">
-    <img id="prevImg" alt="Hasil foto">
+    <img id="prevImg" alt="Captured photo">
     <video id="prevVid" controls playsinline hidden></video>
     <div id="noteEdit" hidden>
-      <label for="prevLoc">Lokasi di foto ini</label>
-      <textarea id="prevLoc" rows="2" placeholder="Alamat…"></textarea>
-      <button class="link" id="prevRegeo" hidden>↻ Cari ulang alamat dari GPS saat foto diambil</button>
-      <label for="prevNote">Catatan di foto ini</label>
-      <input id="prevNote" placeholder="Tulis catatan…">
-      <button class="btn" id="applyNote" style="width:100%;margin-top:10px">Ubah lokasi &amp; catatan</button>
+      <label for="prevLoc">Location on this photo</label>
+      <textarea id="prevLoc" rows="2" placeholder="Address…"></textarea>
+      <button class="link" id="prevRegeo" hidden>↻ Look up address again from the GPS at capture time</button>
+      <label for="prevNote">Note on this photo</label>
+      <input id="prevNote" placeholder="Write a note…">
+      <button class="btn" id="applyNote" style="width:100%;margin-top:10px">Update location &amp; note</button>
     </div>
-    <div class="seg" data-wm><button data-v="1">Dengan watermark</button><button data-v="0">Tanpa watermark</button></div>
-    <div class="row"><button class="btn alt" id="prevDel" style="flex:none;padding:13px 16px" aria-label="Hapus">🗑</button><button class="btn alt" data-close>Tutup</button><button class="btn gold" id="saveBtn">Simpan ke Foto</button></div>
-    <div class="hint">Di iPhone: tekan "Simpan ke Foto" → pilih <b>Save Image</b> / <b>Save Video</b>. Atau tekan-tahan gambar → Save to Photos.</div>
+    <div class="seg" data-wm><button data-v="1">With watermark</button><button data-v="0">Without watermark</button></div>
+    <div class="row"><button class="btn alt" id="prevDel" style="flex:none;padding:13px 16px" aria-label="Delete">🗑</button><button class="btn alt" data-close>Close</button><button class="btn gold" id="saveBtn">Save to Photos</button></div>
+    <div class="hint">Tap "Save to Photos" → choose <b>Save Image</b> / <b>Save Video</b>. Or press and hold the image → Save to Photos.</div>
   </div>
 </div>
 
 <!-- Gallery sheet -->
 <div class="sheet" id="galSheet">
   <div class="card gal">
-    <div class="galhead"><h3 id="galTitle">Galeri</h3><button class="link" id="galAll" hidden>Pilih semua</button><button class="link" id="galSelect">Pilih</button></div>
-    <div class="hint" id="galEmpty" hidden>Belum ada foto atau video.</div>
-    <div class="hint" id="galMode" hidden style="color:#b8860b">Kamu membuka lewat tab Safari. Galeri di Safari terpisah dari galeri di app home screen — buka dari ikon home screen untuk melihat foto yang diambil di sana.</div>
+    <div class="galhead"><h3 id="galTitle">Gallery</h3><button class="link" id="galAll" hidden>Select all</button><button class="link" id="galSelect">Select</button></div>
+    <div class="hint" id="galEmpty" hidden>No photos or videos yet.</div>
+    <div class="hint" id="galMode" hidden style="color:#b8860b">You opened this in a Safari tab. The Safari gallery is separate from the home-screen app — open it from the home-screen icon to see photos taken there.</div>
     <div class="ggrid" id="galGrid"></div>
-    <div class="seg" data-wm><button data-v="1">Dengan watermark</button><button data-v="0">Tanpa watermark</button></div>
-    <div class="row"><button class="btn alt" data-close>Tutup</button><button class="btn alt" id="galDel" hidden>Hapus</button><button class="btn gold" id="galSave">Simpan</button></div>
-    <div class="hint">Foto &amp; video tersimpan di app sampai kamu hapus. "Simpan ke Foto" membuka share sheet → pilih <b>Save Images</b> untuk menyimpan semuanya sekaligus. ✓ = sudah disimpan.</div>
+    <div class="seg" data-wm><button data-v="1">With watermark</button><button data-v="0">Without watermark</button></div>
+    <div class="row"><button class="btn alt" data-close>Close</button><button class="btn alt" id="galDel" hidden>Delete</button><button class="btn gold" id="galSave">Save</button></div>
+    <div class="hint">Photos &amp; videos stay in the app until you delete them. "Save to Photos" opens the share sheet → choose <b>Save Images</b> to save them all at once. ✓ = already saved.</div>
   </div>
 </div>
 
@@ -278,7 +278,7 @@ const store = {
 };
 const state = {
   facing: 'environment', zoom: 1, deviceId: null, lenses: null, torch: false, stream: null,
-  autoLoc: 'Mencari lokasi…', coords: null,
+  autoLoc: 'Finding location…', coords: null,
   manualLoc: store.get('manualLoc', ''), note: store.get('note', "I've been here :)"), showCoord: store.get('showCoord', false),
   lastBlob: null, lastUrl: null
 };
@@ -309,7 +309,7 @@ async function startCamera() {
   if (document.body.classList.contains('recording')) stopRecording();
   if (state.stream) state.stream.getTracks().forEach(t => t.stop());
   msg.style.display = 'grid';
-  msg.innerHTML = '<div>Mengaktifkan kamera…<br><small>Izinkan akses kamera jika diminta</small></div>';
+  msg.innerHTML = '<div>Starting camera…<br><small>Allow camera access if asked</small></div>';
   // Try high resolution first, then fall back if the browser refuses or stalls
   // A specific lens (e.g. ultra-wide for 0.5x) is picked by deviceId; otherwise by front/back
   const pick = state.deviceId ? { deviceId: { exact: state.deviceId } } : { facingMode: { ideal: state.facing } };
@@ -337,9 +337,9 @@ async function startCamera() {
     }
   }
   const hint = lastErr && lastErr.name === 'NotAllowedError'
-    ? 'Izin kamera ditolak. Buka Settings → Safari → Camera → Allow, lalu coba lagi.'
-    : 'Kamera tidak bisa diakses.';
-  msg.innerHTML = `<div>${hint}<br><small>${(lastErr && lastErr.name) || ''}</small><br><button id="retry">Coba lagi</button></div>`;
+    ? 'Camera access denied. Go to Settings → Safari → Camera → Allow, then try again.'
+    : 'Camera is not available.';
+  msg.innerHTML = `<div>${hint}<br><small>${(lastErr && lastErr.name) || ''}</small><br><button id="retry">Try again</button></div>`;
   $('retry').onclick = startCamera;
 }
 $('flipBtn').onclick = () => {
@@ -366,7 +366,7 @@ function updateTorchIcon() { $('torchSlash').style.display = state.torch ? 'none
 $('torchBtn').onclick = async () => {
   const track = state.stream && state.stream.getVideoTracks()[0];
   const caps = track && track.getCapabilities ? track.getCapabilities() : {};
-  if (!caps.torch) { alert('Flash tidak didukung browser ini (Safari iPhone belum mendukung flash untuk web app).'); return; }
+  if (!caps.torch) { alert('Flash is not supported here (iPhone Safari does not allow flash for web apps).'); return; }
   state.torch = !state.torch;
   try { await track.applyConstraints({ advanced: [{ torch: state.torch }] }); } catch {}
   updateTorchIcon();
@@ -388,7 +388,7 @@ $('zoom').onclick = async e => {
   const L = state.lenses || {};
   let device = L.wide ? L.wide.deviceId : null, digital = z;
   if (z === 0.5) {
-    if (!L.ultra) { alert('Lensa ultra-wide (0.5x) tidak tersedia di iPhone/browser ini.'); return; }
+    if (!L.ultra) { alert('The ultra-wide (0.5x) lens is not available on this iPhone/browser.'); return; }
     device = L.ultra.deviceId; digital = 1;
   }
   setZoomUI(z); applyDigitalZoom(digital);
@@ -403,7 +403,7 @@ async function reverseGeocode(lat, lon) {
   const key = lat.toFixed(4) + ',' + lon.toFixed(4);           // ~10 m grid, avoids repeat lookups
   if (geoCache.key === key) return geoCache.text;
   try {
-    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=id&zoom=18&addressdetails=1`);
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=en&zoom=18&addressdetails=1`);
     const j = await r.json(); const a = j.address || {};
     const text = formatAddress(j, a) || j.display_name;
     geoCache.key = key; geoCache.text = text;
@@ -414,8 +414,9 @@ async function reverseGeocode(lat, lon) {
 function formatAddress(j, a) {
   const short = s => (s || '')
     .replace(/^Jalan\s+/i, 'Jl. ').replace(/\bKyai Haji\b/g, 'KH').replace(/\bHaji\b/g, 'H.')
-    .replace(/^Daerah Khusus Ibukota Jakarta$/i, 'DKI Jakarta').replace(/^Daerah Khusus Jakarta$/i, 'DKI Jakarta')
-    .replace(/^Daerah Istimewa Yogyakarta$/i, 'DI Yogyakarta').replace(/^Kota\s+/i, '').replace(/^Kabupaten\s+/i, 'Kab. ')
+    .replace(/^(Special Capital Region of Jakarta|Daerah Khusus (Ibukota )?Jakarta|DKI Jakarta)$/i, 'Jakarta')
+    .replace(/^(Special Region of Yogyakarta|Daerah Istimewa Yogyakarta)$/i, 'Yogyakarta')
+    .replace(/\s+(Regency|City)$/i, '').replace(/^(Kota|Kabupaten)\s+/i, '')
     .trim();
   const poiCats = ['amenity', 'building', 'tourism', 'leisure', 'historic', 'office', 'shop', 'aeroway', 'railway', 'man_made'];
   const poi = j.name && poiCats.includes(j.category) ? j.name : '';
@@ -452,21 +453,21 @@ async function onFix(p) {
   renderWm();
 }
 function onGeoErr(e) {
-  if (e.code === 1) state.autoLoc = 'Izin lokasi ditolak';
-  else if (!geo.best) state.autoLoc = 'Lokasi belum ditemukan';
+  if (e.code === 1) state.autoLoc = 'Location access denied';
+  else if (!geo.best) state.autoLoc = 'Location not found yet';
   renderWm();
 }
 function getLocation(fresh) {
-  if (!navigator.geolocation) { state.autoLoc = 'Lokasi tidak tersedia'; renderWm(); return; }
+  if (!navigator.geolocation) { state.autoLoc = 'Location not available'; renderWm(); return; }
   if (fresh) { geo.best = null; geo.lastLookup = null; geoCache.key = ''; }
-  if (!geo.best) { state.autoLoc = 'Mencari lokasi…'; renderWm(); }
+  if (!geo.best) { state.autoLoc = 'Finding location…'; renderWm(); }
   const opts = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 };
   if (geo.watch !== null) navigator.geolocation.clearWatch(geo.watch);
   geo.watch = navigator.geolocation.watchPosition(onFix, onGeoErr, opts);
 }
 function updateAccLabel() {
   const el = $('accLbl'); if (!el) return;
-  el.textContent = state.accuracy ? `Akurasi GPS saat ini: ±${state.accuracy} m` : '';
+  el.textContent = state.accuracy ? `Current GPS accuracy: ±${state.accuracy} m` : '';
 }
 $('locBtn').onclick = () => getLocation(true);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) getLocation(); });
@@ -681,7 +682,7 @@ async function takePhoto() {
                  raw: await toBlob(raw, 'image/jpeg', 0.95), snap: { date: Date.now(), loc: locText(), note: state.note, coords: state.coords ? { ...state.coords } : null } };
   await renderPhoto(item);
   showItem(item); setThumbBtn(item);
-  db.put(item).catch(() => alert('Penyimpanan HP penuh — foto belum tersimpan di galeri app. Simpan ke Photos sekarang.'));
+  db.put(item).catch(() => alert('Phone storage is full — this photo was not saved to the app gallery. Save it to Photos now.'));
 }
 
 /* Video: draw camera + live watermark onto a canvas and record that canvas */
@@ -691,7 +692,7 @@ function pickMime() {
   return opts.find(m => window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) || '';
 }
 async function startRecording() {
-  if (!window.MediaRecorder) { alert('Browser ini belum mendukung rekam video.'); return; }
+  if (!window.MediaRecorder) { alert('Video recording is not supported in this browser.'); return; }
   const fr = frameRect();
   const scale = Math.min(1, 1080 / fr.W);                 // cap at 1080x1920 so the phone keeps up
   const pw = Math.round(fr.W * scale / 2) * 2, ph = Math.round(fr.H * scale / 2) * 2;
@@ -725,7 +726,7 @@ async function startRecording() {
     const item = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), kind: 'video', time: rec.start, saved: false,
                    blob, thumb: rec.thumb, dur: Math.round((Date.now() - rec.start) / 1000) };
     showItem(item); setThumbBtn(item);
-    db.put(item).catch(() => alert('Penyimpanan HP penuh — video belum tersimpan di galeri app. Simpan ke Photos sekarang.'));
+    db.put(item).catch(() => alert('Phone storage is full — this video was not saved to the app gallery. Save it to Photos now.'));
   };
   rec.recorder.start(1000);
   rec.start = Date.now();
@@ -749,7 +750,7 @@ $('modes').onclick = e => {
   state.mode = s.dataset.mode;
   [...$('modes').children].forEach(x => x.classList.toggle('on', x === s));
   document.body.classList.toggle('video-mode', state.mode === 'video');
-  $('shutter').setAttribute('aria-label', state.mode === 'video' ? 'Rekam video' : 'Ambil foto');
+  $('shutter').setAttribute('aria-label', state.mode === 'video' ? 'Record video' : 'Take photo');
 };
 
 /* Self-timer: off → 3 s → 10 s (remembered). Works for photo and for starting a video. */
@@ -801,10 +802,10 @@ $('applyNote').onclick = async () => {
 };
 $('prevRegeo').onclick = async () => {
   const c = state.current && state.current.snap && state.current.snap.coords; if (!c) return;
-  $('prevRegeo').textContent = 'Mencari alamat…';
+  $('prevRegeo').textContent = 'Looking up address…';
   geoCache.key = '';
   $('prevLoc').value = await reverseGeocode(c.lat, c.lon);
-  $('prevRegeo').textContent = '↻ Cari ulang alamat dari GPS saat foto diambil';
+  $('prevRegeo').textContent = '↻ Look up address again from the GPS at capture time';
   $('applyNote').click();
 };
 $('prevNote').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('applyNote').click(); $('prevNote').blur(); } });
@@ -856,7 +857,7 @@ async function renderGallery() {
   gal.items = await db.all().catch(() => []);
   const grid = $('galGrid');
   grid.innerHTML = '';
-  $('galTitle').textContent = `Galeri (${gal.items.length})`;
+  $('galTitle').textContent = `Gallery (${gal.items.length})`;
   $('galEmpty').hidden = gal.items.length > 0;
   $('galMode').hidden = !!(navigator.standalone || matchMedia('(display-mode: standalone)').matches);
   for (const it of gal.items) {
@@ -876,13 +877,13 @@ async function renderGallery() {
 function updateGalBar() {
   const n = gal.picked.size;
   document.getElementById('galSheet').classList.toggle('selecting', gal.select);
-  $('galSelect').textContent = gal.select ? 'Batal' : 'Pilih';
+  $('galSelect').textContent = gal.select ? 'Cancel' : 'Select';
   $('galAll').hidden = !gal.select;
-  $('galAll').textContent = n === gal.items.length && n ? 'Kosongkan' : 'Pilih semua';
-  $('galSave').textContent = gal.select ? `Simpan ke Foto (${n})` : 'Simpan yang belum (' + gal.items.filter(i => !i.saved).length + ')';
+  $('galAll').textContent = n === gal.items.length && n ? 'Deselect all' : 'Select all';
+  $('galSave').textContent = gal.select ? `Save to Photos (${n})` : 'Save unsaved (' + gal.items.filter(i => !i.saved).length + ')';
   $('galSave').disabled = gal.select ? !n : !gal.items.some(i => !i.saved);
   $('galDel').hidden = !gal.select; $('galDel').disabled = !n;
-  $('galDel').textContent = `Hapus (${n})`;
+  $('galDel').textContent = `Delete (${n})`;
 }
 $('thumbBtn').onclick = () => { gal.select = false; gal.picked.clear(); state.galleryOpen = true; openSheet('galSheet'); renderGallery(); };
 $('galSheet').addEventListener('click', e => { if (e.target.id === 'galSheet' || e.target.hasAttribute('data-close')) state.galleryOpen = false; });
@@ -898,7 +899,7 @@ $('galSave').onclick = async () => {
 $('galDel').onclick = async () => {
   const n = gal.picked.size; if (!n) return;
   const unsaved = gal.items.filter(i => gal.picked.has(i.id) && !i.saved).length;
-  if (!confirm(`Hapus ${n} item dari galeri app?` + (unsaved ? `\n${unsaved} di antaranya belum disimpan ke Photos.` : ''))) return;
+  if (!confirm(`Delete ${n} item(s) from the app gallery?` + (unsaved ? `\n${unsaved} of them are not saved to Photos yet.` : ''))) return;
   for (const id of gal.picked) await db.del(id).catch(() => {});
   gal.select = false; gal.picked.clear();
   await renderGallery();
@@ -906,7 +907,7 @@ $('galDel').onclick = async () => {
 };
 $('prevDel').onclick = async () => {
   const it = state.current; if (!it) return;
-  if (!confirm('Hapus item ini dari galeri app?' + (it.saved ? '' : '\nBelum disimpan ke Photos.'))) return;
+  if (!confirm('Delete this item from the app gallery?' + (it.saved ? '' : '\nIt is not saved to Photos yet.'))) return;
   await db.del(it.id).catch(() => {});
   $('prevSheet').classList.remove('open');
   const items = await db.all().catch(() => []); setThumbBtn(items[0]);
