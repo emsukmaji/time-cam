@@ -414,6 +414,10 @@ async function reverseGeocode(lat, lon) {
     const sa = (s && s.address) || {};
     if (streetOf(sa)) { a.road = streetOf(sa); a.house_number = a.house_number || sa.house_number; }
   }
+  if (!streetOf(a)) {
+    const near = await nearestNamedRoad(lat, lon);
+    if (near) a.road = near;
+  }
   if (!streetOf(a) || !a.postcode) {
     const ph = await getJSON(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}&lang=en&limit=1`);
     const pp = ph && ph.features && ph.features[0] && ph.features[0].properties;
@@ -426,6 +430,38 @@ async function reverseGeocode(lat, lon) {
   const text = formatAddress(j, a) || j.display_name;
   geoCache.key = key; geoCache.text = text;
   return text;
+}
+// Nearest named street within ~250 m (OpenStreetMap via Overpass) — used when the address lookup has no street
+async function nearestNamedRoad(lat, lon) {
+  const q = `[out:json][timeout:10];way(around:250,${lat},${lon})[highway][name][highway!~"^(footway|path|steps|cycleway|track|bridleway|corridor|platform|proposed|construction)$"];out geom tags;`;
+  let j = null;
+  for (const host of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
+    try {
+      const r = await fetch(host, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+      if (r.ok) { j = await r.json(); break; }
+    } catch {}
+  }
+  return pickNearestRoad(j && j.elements, lat, lon);
+}
+function pickNearestRoad(ways, lat, lon) {
+  if (!ways || !ways.length) return '';
+  const kx = 111320 * Math.cos(lat * Math.PI / 180), ky = 110540;      // metres per degree
+  const segDist = (p, q) => {
+    const ax = (p.lon - lon) * kx, ay = (p.lat - lat) * ky, bx = (q.lon - lon) * kx, by = (q.lat - lat) * ky;
+    const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy;
+    const tt = L ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L)) : 0;
+    return Math.hypot(ax + tt * dx, ay + tt * dy);
+  };
+  let best = '', bestD = Infinity;
+  for (const w of ways) {
+    const g = w.geometry || [], name = w.tags && (w.tags['name:en'] || w.tags.name);
+    if (!name) continue;
+    for (let i = 0; i < g.length; i++) {
+      const d = g.length === 1 ? segDist(g[0], g[0]) : (i ? segDist(g[i - 1], g[i]) : Infinity);
+      if (d < bestD) { bestD = d; best = name; }
+    }
+  }
+  return best;
 }
 const streetOf = a => a.road || a.pedestrian || a.footway || a.residential || a.path || a.service || '';
 // Full address: [place], [no.] street, village, district, city/regency, province postcode
