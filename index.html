@@ -254,7 +254,7 @@
 <!-- Gallery sheet -->
 <div class="sheet" id="galSheet">
   <div class="card gal">
-    <div class="galhead"><h3 id="galTitle">Gallery</h3><button class="link" id="galAll" hidden>Select all</button><button class="link" id="galSelect">Select</button></div>
+    <div class="galhead"><h3 id="galTitle">Gallery</h3><button class="link" id="galUpload">＋ Upload</button><input type="file" id="galFile" accept="image/*" multiple hidden><button class="link" id="galAll" hidden>Select all</button><button class="link" id="galSelect">Select</button></div>
     <div class="hint" id="galEmpty" hidden>No photos or videos yet.</div>
     <div class="hint" id="galMode" hidden style="color:#b8860b">You opened this in a Safari tab. The Safari gallery is separate from the home-screen app — open it from the home-screen icon to see photos taken there.</div>
     <div class="ggrid" id="galGrid"></div>
@@ -955,6 +955,84 @@ function updateGalBar() {
 }
 $('thumbBtn').onclick = () => { gal.select = false; gal.picked.clear(); state.galleryOpen = true; openSheet('galSheet'); renderGallery(); };
 $('galSheet').addEventListener('click', e => { if (e.target.id === 'galSheet' || e.target.hasAttribute('data-close')) state.galleryOpen = false; });
+/* ---------- Upload photos from the phone and add the watermark ----------
+   Uses the photo's own date/time and GPS (from its EXIF data) when available. */
+function readExif(buf) {
+  const v = new DataView(buf);
+  if (v.byteLength < 4 || v.getUint16(0) !== 0xFFD8) return {};
+  let off = 2;
+  while (off + 4 < v.byteLength) {
+    const marker = v.getUint16(off), size = v.getUint16(off + 2);
+    if (marker === 0xFFE1 && v.getUint32(off + 4) === 0x45786966) return parseTiff(v, off + 10);
+    if ((marker & 0xFF00) !== 0xFF00) break;
+    off += 2 + size;
+  }
+  return {};
+}
+function parseTiff(v, start) {
+  const le = v.getUint16(start) === 0x4949;
+  const u16 = o => v.getUint16(o, le), u32 = o => v.getUint32(o, le);
+  const readIFD = (o) => {
+    const out = {}; if (o + 2 > v.byteLength) return out;
+    const n = u16(o);
+    for (let i = 0; i < n; i++) {
+      const e = o + 2 + i * 12; if (e + 12 > v.byteLength) break;
+      const tag = u16(e), type = u16(e + 2), cnt = u32(e + 4), valOff = e + 8;
+      const size = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 7: 1, 9: 4, 10: 8 }[type] || 1;
+      const dataOff = size * cnt > 4 ? start + u32(valOff) : valOff;
+      try {
+        if (type === 2) { let s = ''; for (let k = 0; k < cnt - 1; k++) s += String.fromCharCode(v.getUint8(dataOff + k)); out[tag] = s; }
+        else if (type === 5) { const a = []; for (let k = 0; k < cnt; k++) a.push(u32(dataOff + k * 8) / u32(dataOff + k * 8 + 4)); out[tag] = a; }
+        else if (type === 3) out[tag] = u16(dataOff);
+        else if (type === 4) out[tag] = u32(dataOff);
+      } catch {}
+    }
+    return out;
+  };
+  const ifd0 = readIFD(start + u32(start + 4));
+  const exif = ifd0[0x8769] ? readIFD(start + ifd0[0x8769]) : {};
+  const gps = ifd0[0x8825] ? readIFD(start + ifd0[0x8825]) : {};
+  const res = {};
+  const dt = exif[0x9003] || exif[0x9004] || ifd0[0x0132];
+  const m = dt && dt.match(/^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
+  if (m) res.date = new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+  const dms = a => a && a.length === 3 ? a[0] + a[1] / 60 + a[2] / 3600 : null;
+  const la = dms(gps[2]), lo = dms(gps[4]);
+  if (la != null && lo != null && (la || lo)) res.coords = { lat: gps[1] === 'S' ? -la : la, lon: gps[3] === 'W' ? -lo : lo };
+  return res;
+}
+$('galUpload').onclick = () => $('galFile').click();
+$('galFile').onchange = async e => {
+  const files = [...e.target.files]; e.target.value = '';
+  if (!files.length) return;
+  const btn = $('galUpload'); btn.disabled = true;
+  let done = 0, noMeta = 0;
+  for (const f of files) {
+    btn.textContent = `Adding ${++done}/${files.length}…`;
+    try {
+      let meta = {};
+      try { meta = readExif(await f.slice(0, 256 * 1024).arrayBuffer()); } catch {}
+      const bmp = await createImageBitmap(f);                         // respects the photo's rotation
+      const s = Math.min(1, 4096 / Math.max(bmp.width, bmp.height));
+      const c = document.createElement('canvas'); c.width = Math.round(bmp.width * s); c.height = Math.round(bmp.height * s);
+      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+      if (!meta.date) noMeta++;
+      const coords = meta.coords || null;
+      const item = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), kind: 'photo', time: Date.now(), saved: false, uploaded: true,
+                     raw: await toBlob(c, 'image/jpeg', 0.95),
+                     snap: { date: meta.date || f.lastModified || Date.now(), loc: coords ? `${coords.lat.toFixed(5)}, ${coords.lon.toFixed(5)}` : '', note: state.note, coords } };
+      await renderPhoto(item);
+      await db.put(item);
+      if (coords) reverseGeocode(coords.lat, coords.lon).then(async txt => {   // fill in the address in the background
+        if (!txt) return; item.snap.loc = txt; await renderPhoto(item); await db.put(item).catch(() => {});
+        if (state.galleryOpen) renderGallery();
+      });
+    } catch { alert(`Could not read "${f.name}".`); }
+  }
+  btn.disabled = false; btn.textContent = '＋ Upload';
+  await renderGallery(); setThumbBtn(gal.items[0]);
+  if (noMeta) alert(`${noMeta} photo(s) had no original date in the file — the file date was used. You can edit location and note by opening the photo.`);
+};
 $('galSelect').onclick = () => { gal.select = !gal.select; gal.picked.clear(); renderGallery(); };
 $('galAll').onclick = () => {
   if (gal.picked.size === gal.items.length) gal.picked.clear(); else gal.items.forEach(i => gal.picked.add(i.id));
