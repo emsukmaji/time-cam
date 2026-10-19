@@ -399,28 +399,30 @@ $('zoom').onclick = async e => {
    Keeps watching GPS (not a single reading), keeps the most accurate fix,
    and looks up a detailed street address (house number, road, area, city, postcode). */
 const geoCache = { key: '', text: '' };
-async function reverseGeocode(lat, lon) {
+// fetch that gives up after `ms` so a slow map server can never leave the watermark stuck
+function fetchT(url, opts = {}, ms = 6000) {
+  const c = new AbortController(); const id = setTimeout(() => c.abort(), ms);
+  return fetch(url, { ...opts, signal: c.signal }).finally(() => clearTimeout(id));
+}
+async function reverseGeocode(lat, lon, onPartial) {
   const key = lat.toFixed(4) + ',' + lon.toFixed(4);           // ~10 m grid, avoids repeat lookups
   if (geoCache.key === key) return geoCache.text;
-  const getJSON = async url => { try { const r = await fetch(url); return r.ok ? await r.json() : null; } catch { return null; } };
+  const getJSON = async url => { try { const r = await fetchT(url); return r.ok ? await r.json() : null; } catch { return null; } };
   const nomi = z => getJSON(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=en&zoom=${z}&addressdetails=1`);
   // 1) most detailed match (building / place)
   const j = await nomi(18);
   if (!j || j.error) return geoCache.key === key ? geoCache.text : `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
   const a = { ...(j.address || {}) };
+  if (onPartial) onPartial(formatAddress(j, a) || j.display_name);   // show this right away, refine below
   // 2) no street on that object? ask for the nearest street, then a second map source
-  if (!streetOf(a)) {
-    const s = await nomi(17);
-    const sa = (s && s.address) || {};
-    if (streetOf(sa)) { a.road = streetOf(sa); a.house_number = a.house_number || sa.house_number; }
-  }
-  if (!streetOf(a)) {
-    const near = await nearestNamedRoad(lat, lon);
-    if (near) a.road = near;
-  }
+  // 2) fill in a missing street / postcode from two more sources, asked at the same time
   if (!streetOf(a) || !a.postcode) {
-    const ph = await getJSON(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}&lang=en&limit=1`);
+    const [near, ph] = await Promise.all([
+      streetOf(a) ? '' : nearestNamedRoad(lat, lon),
+      getJSON(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}&lang=en&limit=1`)
+    ]);
     const pp = ph && ph.features && ph.features[0] && ph.features[0].properties;
+    if (!streetOf(a) && near) a.road = near;
     if (pp) {
       if (!streetOf(a) && pp.street) { a.road = pp.street; a.house_number = a.house_number || pp.housenumber; }
       if (!a.postcode && pp.postcode) a.postcode = pp.postcode;
@@ -437,7 +439,7 @@ async function nearestNamedRoad(lat, lon) {
   let j = null;
   for (const host of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
     try {
-      const r = await fetch(host, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+      const r = await fetchT(host, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }, 6000);
       if (r.ok) { j = await r.json(); break; }
     } catch {}
   }
@@ -510,7 +512,11 @@ async function onFix(p) {
   const L = geo.lastLookup;
   if (!L || distM(L, fix) > 15 || fix.acc < L.acc * 0.5) {
     geo.lastLookup = fix;
-    state.autoLoc = await reverseGeocode(fix.lat, fix.lon);
+    if (!geo.hasAddr) { state.autoLoc = `${fix.lat.toFixed(5)}, ${fix.lon.toFixed(5)}`; renderWm(); }
+    const partial = txt => { if (txt) { state.autoLoc = txt; geo.hasAddr = true; renderWm(); } };
+    const full = await reverseGeocode(fix.lat, fix.lon, partial);
+    if (full && !/^-?\d+\.\d+, -?\d+\.\d+$/.test(full)) { state.autoLoc = full; geo.hasAddr = true; }
+    else if (!geo.hasAddr) state.autoLoc = full;
   }
   renderWm();
 }
@@ -522,7 +528,7 @@ function onGeoErr(e) {
 function getLocation(fresh) {
   if (!navigator.geolocation) { state.autoLoc = 'Location not available'; renderWm(); return; }
   if (fresh) { geo.best = null; geo.lastLookup = null; geoCache.key = ''; }
-  if (!geo.best) { state.autoLoc = 'Finding location…'; renderWm(); }
+  if (!geo.best && !geo.hasAddr) { state.autoLoc = 'Finding location…'; renderWm(); }
   const opts = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 };
   if (geo.watch !== null) navigator.geolocation.clearWatch(geo.watch);
   geo.watch = navigator.geolocation.watchPosition(onFix, onGeoErr, opts);
