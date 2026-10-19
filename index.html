@@ -402,32 +402,58 @@ const geoCache = { key: '', text: '' };
 async function reverseGeocode(lat, lon) {
   const key = lat.toFixed(4) + ',' + lon.toFixed(4);           // ~10 m grid, avoids repeat lookups
   if (geoCache.key === key) return geoCache.text;
-  try {
-    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=en&zoom=18&addressdetails=1`);
-    const j = await r.json(); const a = j.address || {};
-    const text = formatAddress(j, a) || j.display_name;
-    geoCache.key = key; geoCache.text = text;
-    return text;
-  } catch { return `${lat.toFixed(5)}, ${lon.toFixed(5)}`; }
+  const getJSON = async url => { try { const r = await fetch(url); return r.ok ? await r.json() : null; } catch { return null; } };
+  const nomi = z => getJSON(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=en&zoom=${z}&addressdetails=1`);
+  // 1) most detailed match (building / place)
+  const j = await nomi(18);
+  if (!j || j.error) return geoCache.key === key ? geoCache.text : `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+  const a = { ...(j.address || {}) };
+  // 2) no street on that object? ask for the nearest street, then a second map source
+  if (!streetOf(a)) {
+    const s = await nomi(17);
+    const sa = (s && s.address) || {};
+    if (streetOf(sa)) { a.road = streetOf(sa); a.house_number = a.house_number || sa.house_number; }
+  }
+  if (!streetOf(a) || !a.postcode) {
+    const ph = await getJSON(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}&lang=en&limit=1`);
+    const pp = ph && ph.features && ph.features[0] && ph.features[0].properties;
+    if (pp) {
+      if (!streetOf(a) && pp.street) { a.road = pp.street; a.house_number = a.house_number || pp.housenumber; }
+      if (!a.postcode && pp.postcode) a.postcode = pp.postcode;
+      if (!a.city_district && pp.district) a.city_district = pp.district;
+    }
+  }
+  const text = formatAddress(j, a) || j.display_name;
+  geoCache.key = key; geoCache.text = text;
+  return text;
 }
-// Short, Timemark-like address: [place name], street, kelurahan, kota, provinsi
+const streetOf = a => a.road || a.pedestrian || a.footway || a.residential || a.path || a.service || '';
+// Full address: [place], [no.] street, village, district, city/regency, province postcode
 function formatAddress(j, a) {
   const short = s => (s || '')
-    .replace(/^Jalan\s+/i, 'Jl. ').replace(/\bKyai Haji\b/g, 'KH').replace(/\bHaji\b/g, 'H.')
+    .replace(/^Jalan\s+/i, 'Jl. ').replace(/^Jl\s+/i, 'Jl. ').replace(/\bKyai Haji\b/g, 'KH').replace(/\bHaji\b/g, 'H.')
     .replace(/^(Special Capital Region of Jakarta|Daerah Khusus (Ibukota )?Jakarta|DKI Jakarta)$/i, 'Jakarta')
     .replace(/^(Special Region of Yogyakarta|Daerah Istimewa Yogyakarta)$/i, 'Yogyakarta')
-    .replace(/\s+(Regency|City)$/i, '').replace(/^(Kota|Kabupaten)\s+/i, '')
+    .replace(/^(Kabupaten|Kab\.?)\s+(.+)$/i, '$2 Regency').replace(/^Kota\s+/i, '')
+    .replace(/^(Kecamatan|Kec\.?|Kelurahan|Kel\.?|Desa)\s+/i, '')
     .trim();
-  const poiCats = ['amenity', 'building', 'tourism', 'leisure', 'historic', 'office', 'shop', 'aeroway', 'railway', 'man_made'];
+  const poiCats = ['amenity', 'building', 'tourism', 'leisure', 'historic', 'office', 'shop', 'aeroway', 'railway', 'man_made', 'religion'];
   const poi = j.name && poiCats.includes(j.category) ? j.name : '';
-  const street = [a.house_number, short(a.road || a.pedestrian || a.footway || a.residential)].filter(Boolean).join(' ');
+  const street = [a.house_number, short(streetOf(a))].filter(Boolean).join(' ');
   const state = short(a.state);
-  const area = short(a.village || a.neighbourhood || a.quarter || a.hamlet || a.suburb);
-  const city = [a.city, a.town, a.municipality, a.state_district, a.county, a.city_district]
-    .map(short).find(c => c && c !== state && c !== area) || '';
-  const parts = [poi, street, area, city, state].filter(Boolean);
-  const seen = new Set();
-  return parts.filter(x => { const k = x.toLowerCase(); return !seen.has(k) && seen.add(k); }).join(', ');
+  const rest = [a.neighbourhood, a.hamlet, a.village, a.quarter, a.suburb, a.city_district, a.municipality,
+                a.town, a.city, a.county, a.state_district].map(short);
+  const tail = [state, a.postcode].filter(Boolean).join(' ');
+  const parts = [poi, street, ...rest, tail].filter(Boolean);
+  const seen = new Set([state.toLowerCase()]);
+  const out = [];
+  for (const x of parts) {
+    const k = x.toLowerCase().replace(/ (regency|city)$/, '');
+    if (x === tail) { out.push(x); continue; }
+    if (seen.has(k)) continue;
+    seen.add(k); out.push(x);
+  }
+  return out.join(', ');
 }
 const geo = { watch: null, best: null, lastLookup: null, timer: 0 };
 const distM = (a, b) => {
